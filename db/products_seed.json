@@ -1,0 +1,4731 @@
+{
+  "categories": [
+    {
+      "id": "pressure_switch",
+      "label": "Pressure switch (on/off, mechanical)"
+    },
+    {
+      "id": "dp_switch",
+      "label": "Differential pressure switch"
+    },
+    {
+      "id": "temp_switch",
+      "label": "Temperature switch"
+    },
+    {
+      "id": "level_switch",
+      "label": "Level switch (float, on/off)"
+    },
+    {
+      "id": "level_gauge",
+      "label": "Level gauge (visual indication)"
+    },
+    {
+      "id": "pressure_transmitter",
+      "label": "Pressure transmitter (4-20 mA)"
+    },
+    {
+      "id": "smart_pressure_transmitter",
+      "label": "Smart pressure transmitter (HART/Modbus)"
+    },
+    {
+      "id": "smart_dp_transmitter",
+      "label": "Smart differential pressure transmitter"
+    },
+    {
+      "id": "temp_transmitter",
+      "label": "Temperature transmitter (RTD/TC to 4-20 mA)"
+    },
+    {
+      "id": "pressure_gauge",
+      "label": "Pressure gauge (Bourdon, dial)"
+    }
+  ],
+  "units": {
+    "pressure_switch": "bar",
+    "dp_switch": "bar",
+    "temp_switch": "\u00b0C",
+    "level_switch": "mm (insertion/probe)",
+    "level_gauge": "mm (C-C distance)",
+    "pressure_transmitter": "bar",
+    "smart_pressure_transmitter": "bar",
+    "smart_dp_transmitter": "bar",
+    "temp_transmitter": "\u00b0C",
+    "pressure_gauge": "bar"
+  },
+  "microswitch_table": [
+    [
+      "Description",
+      "Rating",
+      "Code (1SPDT)",
+      "Code (2SPDT)"
+    ],
+    [
+      "General purpose",
+      "5-15A, 250 VAC",
+      "A",
+      "B"
+    ],
+    [
+      "Gold contact",
+      "1A, 250 VAC",
+      "C",
+      "D"
+    ],
+    [
+      "Environmentally sealed, silver contact",
+      "5-15A, 250 VAC",
+      "E",
+      "F"
+    ],
+    [
+      "Environmentally sealed, gold contact",
+      "1A, 250 VAC",
+      "G",
+      "H"
+    ],
+    [
+      "Hermetically sealed, silver contact",
+      "5-15A, 250 VAC",
+      "I",
+      "J"
+    ],
+    [
+      "Hermetically sealed, gold contact",
+      "1A, 250 VAC",
+      "K",
+      "L"
+    ]
+  ],
+  "products": [
+    {
+      "model": "WP",
+      "family": "Weatherproof Pressure Switch",
+      "category": "pressure_switch",
+      "blurb": "General-purpose bottom/panel-mount pressure switch for safe-area duty, aluminium die-cast IP67 enclosure. Diaphragm sensor up to 40 bar; piston sensor used automatically above 40 bar (same code family).",
+      "valMin": -0.2,
+      "valMax": 250,
+      "tempMax": 130,
+      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S. (\u00b13% F.S. typical above 40 bar, piston)",
+      "output": "switch",
+      "hazardous": "safe",
+      "connection": "1/4\" NPT(F) standard; 3/8\"/1/2\" NPT or BSP, size/type selectable",
+      "industries": [
+        "Oil & gas",
+        "Refineries",
+        "Textile machinery",
+        "Railway engines & turbines",
+        "Power plants",
+        "Steel plants",
+        "Furnace applications",
+        "Petro-chemicals & fertilizers",
+        "Cement industry",
+        "Glass industry"
+      ],
+      "keywords": [
+        "boiler",
+        "steam line",
+        "snap switch",
+        "SPDT",
+        "high pressure",
+        "piston",
+        "tanker"
+      ],
+      "extraSpec": {
+        "Sensor / wetted material options": "Sensor MOC: SS316 (standard) / Monel / Hastelloy C / Teflon backup. Wetted-parts MOC: SS316 / Monel / Hastelloy C",
+        "Optional extras": "Calibration test certificate; material test certificate; SS304 tag plate; wall-mounting plate; 2\" pipe U-clamp mounting"
+      },
+      "orderCode": {
+        "skeleton": "WP\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
+        "example": "WP1AAF1AA11-0000 = direct bottom mount, 1/4\" NPT(M), 0.1\u20131 kg/cm\u00b2 dual scale w/ bar, 1 SPDT general purpose 5-15A/250VAC, 3/4\" ET single comp. gland, SS316 sensor, SS316 wetted parts"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Model",
+          "options": [
+            [
+              "WP",
+              "Weatherproof pressure switch"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Mounting",
+          "options": [
+            [
+              "1",
+              "Direct bottom"
+            ],
+            [
+              "2",
+              "Surface bottom"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Process connection size",
+          "options": [
+            [
+              "A",
+              "1/4\""
+            ],
+            [
+              "B",
+              "3/8\""
+            ],
+            [
+              "C",
+              "1/2\""
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Process connection type",
+          "options": [
+            [
+              "A",
+              "NPT (M)"
+            ],
+            [
+              "B",
+              "BSP (M)"
+            ],
+            [
+              "C",
+              "BSPT (M)"
+            ],
+            [
+              "D",
+              "NPT (F)"
+            ],
+            [
+              "E",
+              "BSP (F)"
+            ],
+            [
+              "F",
+              "BSPT (F)"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Range",
+          "options": [
+            [
+              "\u2014",
+              "See range table below"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Units",
+          "options": [
+            [
+              "1",
+              "Kg/sq.cm dual scale with bar"
+            ],
+            [
+              "2",
+              "mBar dual scale with mmWC"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Microswitch",
+          "options": [
+            [
+              "\u2014",
+              "See microswitch table below"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Cable entry",
+          "options": [
+            [
+              "A",
+              "3/4\" ET single comp. gland"
+            ],
+            [
+              "B",
+              "3/4\" ET double comp. gland"
+            ],
+            [
+              "C",
+              "1/2\" NPT single comp. gland"
+            ],
+            [
+              "D",
+              "1/2\" NPT double comp. gland"
+            ],
+            [
+              "E",
+              "PG13.5 single comp. gland"
+            ],
+            [
+              "F",
+              "M20x1.5P single comp. gland"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Sensor MOC",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "Monel"
+            ],
+            [
+              "3",
+              "Hastelloy C"
+            ],
+            [
+              "4",
+              "Teflon backup"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Wetted parts MOC",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "Monel"
+            ],
+            [
+              "3",
+              "Hastelloy C"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Optional features",
+          "options": [
+            [
+              "\u2014",
+              "Calibration cert. / material cert. / SS304 tag plate / wall-mount plate / 2\" pipe U-clamp \u2014 state which, else 0000"
+            ]
+          ]
+        }
+      ],
+      "rangeTable": {
+        "title": "WP / FP range table",
+        "rows": [
+          [
+            "A",
+            "mmWC",
+            "-200 to +200"
+          ],
+          [
+            "B",
+            "mmWC",
+            "-200 to +400"
+          ],
+          [
+            "C",
+            "mmWC",
+            "-400 to +200"
+          ],
+          [
+            "D",
+            "mmWC",
+            "-400 to +600"
+          ],
+          [
+            "E",
+            "mmWC",
+            "-500 to +500"
+          ],
+          [
+            "F",
+            "kg/cm\u00b2 & bar",
+            "0.1 to 1"
+          ],
+          [
+            "G",
+            "kg/cm\u00b2 & bar",
+            "0.2 to 2"
+          ],
+          [
+            "H",
+            "kg/cm\u00b2 & bar",
+            "0.3 to 3"
+          ],
+          [
+            "I",
+            "kg/cm\u00b2 & bar",
+            "0.4 to 4"
+          ],
+          [
+            "J",
+            "kg/cm\u00b2 & bar",
+            "0.5 to 5"
+          ],
+          [
+            "K",
+            "kg/cm\u00b2 & bar",
+            "0.6 to 6"
+          ],
+          [
+            "L",
+            "kg/cm\u00b2 & bar",
+            "0.7 to 7"
+          ],
+          [
+            "M",
+            "kg/cm\u00b2 & bar",
+            "1 to 10"
+          ],
+          [
+            "N",
+            "kg/cm\u00b2 & bar",
+            "1.6 to 16"
+          ],
+          [
+            "O",
+            "kg/cm\u00b2 & bar",
+            "2.5 to 25"
+          ],
+          [
+            "P",
+            "kg/cm\u00b2 & bar",
+            "4 to 40"
+          ],
+          [
+            "Q",
+            "kg/cm\u00b2 & bar",
+            "6 to 60"
+          ],
+          [
+            "R",
+            "kg/cm\u00b2 & bar",
+            "10 to 100"
+          ],
+          [
+            "S",
+            "kg/cm\u00b2 & bar",
+            "16 to 160"
+          ],
+          [
+            "T",
+            "kg/cm\u00b2 & bar",
+            "25 to 220"
+          ],
+          [
+            "U",
+            "kg/cm\u00b2 & bar",
+            "50 to 300"
+          ]
+        ],
+        "note": "Ranges above 40 bar are manufactured with a piston as sensor automatically \u2014 no separate code needed. WP does not offer the vacuum codes (V\u2013Y) that FP does."
+      },
+      "deviations": [
+        "The individual WP datasheet lists a single PG13.5 cable gland, 1 SPDT switch only, and ambient rating \u221210\u202660\u00b0C. The general Pressure Switch mailer describes a broader \"Weatherproof Low/High Pressure Switch\" family with 2SPDT/DPDT options, multiple cable-entry types (ET/NPT/DIN/4-pin/7-pin) and ambient rating \u221220\u202665\u00b0C. These are believed to be the same ordering-code family shown at two levels of detail, but the ambient-temperature figures do not match between the two source documents \u2014 confirm the exact ambient rating for the configuration you are quoting."
+      ]
+    },
+    {
+      "model": "FP",
+      "family": "Flameproof Pressure Switch",
+      "category": "pressure_switch",
+      "blurb": "Same duty as WP but Ex d IIC Gb, IP66 rated for explosive/hazardous atmospheres. Diaphragm sensor to 40 bar, piston above. Also offers vacuum ranges that WP does not.",
+      "valMin": -1,
+      "valMax": 250,
+      "tempMax": 130,
+      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S. (\u00b13% F.S. typical above 40 bar, piston)",
+      "output": "switch",
+      "hazardous": "flameproof",
+      "connection": "1/4\" NPT(F), double compression cable gland",
+      "industries": [
+        "Oil & gas",
+        "Refineries",
+        "Power plants",
+        "Steel plants",
+        "Furnace applications",
+        "Petro-chemicals & fertilizers",
+        "Cement industry",
+        "Glass industry"
+      ],
+      "keywords": [
+        "explosion proof",
+        "boiler",
+        "hazardous area",
+        "high pressure",
+        "piston",
+        "vacuum"
+      ],
+      "extraSpec": {
+        "Sensor / wetted material options": "Sensor MOC: SS316 (standard) / Monel / Hastelloy C / Teflon backup. Wetted-parts MOC: SS316 / Monel / Hastelloy C",
+        "Optional extras": "Calibration/material test certificate; enclosure protection to Gr. IIA/IIB or Gr. IIC; SS304 tag plate; wall/pipe mounting"
+      },
+      "orderCode": {
+        "skeleton": "FP\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
+        "example": "FP1AAM1AE11-0000 = direct bottom, 1/4\" NPT(M), 1\u201310 kg/cm\u00b2 dual scale, 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor, SS316 wetted parts"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Model",
+          "options": [
+            [
+              "FP",
+              "Flameproof pressure switch"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Mounting",
+          "options": [
+            [
+              "1",
+              "Direct bottom"
+            ],
+            [
+              "2",
+              "Surface bottom"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Process connection size",
+          "options": [
+            [
+              "A",
+              "1/4\""
+            ],
+            [
+              "B",
+              "3/8\""
+            ],
+            [
+              "C",
+              "1/2\""
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Process connection type",
+          "options": [
+            [
+              "A",
+              "NPT (M)"
+            ],
+            [
+              "B",
+              "BSP (M)"
+            ],
+            [
+              "C",
+              "BSPT (M)"
+            ],
+            [
+              "D",
+              "NPT (F)"
+            ],
+            [
+              "E",
+              "BSP (F)"
+            ],
+            [
+              "F",
+              "BSPT (F)"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Range",
+          "options": [
+            [
+              "\u2014",
+              "See range table below (includes vacuum codes V\u2013Y)"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Units",
+          "options": [
+            [
+              "1",
+              "Kg/sq.cm dual scale with bar"
+            ],
+            [
+              "2",
+              "mBar dual scale with mmWC"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Microswitch",
+          "options": [
+            [
+              "\u2014",
+              "See microswitch table below"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Cable entry (double-compression only)",
+          "options": [
+            [
+              "B",
+              "3/4\" ET double comp. gland"
+            ],
+            [
+              "D",
+              "1/2\" NPT double comp. gland"
+            ],
+            [
+              "G",
+              "M20x1.5P double comp. gland"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Sensor MOC",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "Monel"
+            ],
+            [
+              "3",
+              "Hastelloy C"
+            ],
+            [
+              "4",
+              "Teflon backup"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Wetted parts MOC",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "Monel"
+            ],
+            [
+              "3",
+              "Hastelloy C"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Optional features",
+          "options": [
+            [
+              "\u2014",
+              "Calibration/material cert. / Gr.IIA,IIB or Gr.IIC enclosure protection / SS304 tag plate / wall or pipe mounting"
+            ]
+          ]
+        }
+      ],
+      "rangeTable": {
+        "title": "WP / FP range table",
+        "rows": [
+          [
+            "A",
+            "mmWC",
+            "-200 to +200"
+          ],
+          [
+            "B",
+            "mmWC",
+            "-200 to +400"
+          ],
+          [
+            "C",
+            "mmWC",
+            "-400 to +200"
+          ],
+          [
+            "D",
+            "mmWC",
+            "-400 to +600"
+          ],
+          [
+            "E",
+            "mmWC",
+            "-500 to +500"
+          ],
+          [
+            "F",
+            "kg/cm\u00b2 & bar",
+            "0.1 to 1"
+          ],
+          [
+            "G",
+            "kg/cm\u00b2 & bar",
+            "0.2 to 2"
+          ],
+          [
+            "H",
+            "kg/cm\u00b2 & bar",
+            "0.3 to 3"
+          ],
+          [
+            "I",
+            "kg/cm\u00b2 & bar",
+            "0.4 to 4"
+          ],
+          [
+            "J",
+            "kg/cm\u00b2 & bar",
+            "0.5 to 5"
+          ],
+          [
+            "K",
+            "kg/cm\u00b2 & bar",
+            "0.6 to 6"
+          ],
+          [
+            "L",
+            "kg/cm\u00b2 & bar",
+            "0.7 to 7"
+          ],
+          [
+            "M",
+            "kg/cm\u00b2 & bar",
+            "1 to 10"
+          ],
+          [
+            "N",
+            "kg/cm\u00b2 & bar",
+            "1.6 to 16"
+          ],
+          [
+            "O",
+            "kg/cm\u00b2 & bar",
+            "2.5 to 25"
+          ],
+          [
+            "P",
+            "kg/cm\u00b2 & bar",
+            "4 to 40"
+          ],
+          [
+            "Q",
+            "kg/cm\u00b2 & bar",
+            "6 to 60"
+          ],
+          [
+            "R",
+            "kg/cm\u00b2 & bar",
+            "10 to 100"
+          ],
+          [
+            "S",
+            "kg/cm\u00b2 & bar",
+            "16 to 160"
+          ],
+          [
+            "T",
+            "kg/cm\u00b2 & bar",
+            "25 to 220"
+          ],
+          [
+            "U",
+            "kg/cm\u00b2 & bar",
+            "50 to 300"
+          ],
+          [
+            "V",
+            "kg/cm\u00b2 & bar",
+            "-1 to +1"
+          ],
+          [
+            "W",
+            "kg/cm\u00b2 & bar",
+            "-1 to +2"
+          ],
+          [
+            "X",
+            "kg/cm\u00b2 & bar",
+            "-1 to +3"
+          ],
+          [
+            "Y",
+            "kg/cm\u00b2 & bar",
+            "-1 to +4"
+          ]
+        ],
+        "note": "FP additionally offers vacuum-compound ranges V\u2013Y, not available on WP. Ranges above 40 bar use a piston sensor automatically."
+      },
+      "deviations": [
+        "Same base-datasheet-vs-mailer ambient-temperature discrepancy as WP (\u221210\u202660\u00b0C individual sheet vs \u221220\u202665\u00b0C mailer) \u2014 confirm before quoting."
+      ]
+    },
+    {
+      "model": "WD",
+      "family": "Weatherproof Differential Pressure Switch",
+      "category": "dp_switch",
+      "blurb": "Safe-area DP switch for filter/compressor-line monitoring, fixed or adjustable differential.",
+      "valMin": 0.003,
+      "valMax": 25,
+      "tempMax": 130,
+      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S.",
+      "output": "switch",
+      "hazardous": "safe",
+      "connection": "1/4\" NPT(F), HP/LP bottom ports",
+      "industries": [
+        "Oil & gas",
+        "Refineries",
+        "Textile machineries",
+        "Railway engines & turbines",
+        "Power plants",
+        "Steel plants",
+        "Petro-chemicals & fertilizers",
+        "Cement industry",
+        "Glass industry"
+      ],
+      "keywords": [
+        "filter blockage",
+        "compressor",
+        "clogging"
+      ],
+      "extraSpec": {
+        "Sensor / wetted material options": "SS316 (standard) / Monel / Hastelloy C / Teflon backup (sensor); SS316 / Monel / Hastelloy C (wetted parts)"
+      },
+      "orderCode": {
+        "skeleton": "WD\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
+        "example": "WD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2\u20132 kg/cm\u00b2 dual scale w/ bar, 1 SPDT general purpose, 3/4\" ET single comp. gland, SS316 sensor/wetted parts"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Model",
+          "options": [
+            [
+              "WD",
+              "Weatherproof differential pressure switch"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Mounting",
+          "options": [
+            [
+              "1",
+              "Direct bottom"
+            ],
+            [
+              "2",
+              "Surface bottom"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Process connection size",
+          "options": [
+            [
+              "A",
+              "1/4\""
+            ],
+            [
+              "B",
+              "3/8\""
+            ],
+            [
+              "C",
+              "1/2\""
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Process connection type",
+          "options": [
+            [
+              "A",
+              "NPT (M)"
+            ],
+            [
+              "B",
+              "BSP (M)"
+            ],
+            [
+              "C",
+              "BSPT (M)"
+            ],
+            [
+              "D",
+              "NPT (F)"
+            ],
+            [
+              "E",
+              "BSP (F)"
+            ],
+            [
+              "F",
+              "BSPT (F)"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Range",
+          "options": [
+            [
+              "\u2014",
+              "See range table below"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Units",
+          "options": [
+            [
+              "1",
+              "Kg/sq.cm dual scale with bar"
+            ],
+            [
+              "2",
+              "mBar dual scale with mmWC"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Microswitch",
+          "options": [
+            [
+              "\u2014",
+              "See microswitch table below"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Cable entry",
+          "options": [
+            [
+              "A",
+              "3/4\" ET single"
+            ],
+            [
+              "B",
+              "3/4\" ET double"
+            ],
+            [
+              "C",
+              "1/2\" NPT single"
+            ],
+            [
+              "D",
+              "1/2\" NPT double"
+            ],
+            [
+              "E",
+              "PG13.5 single"
+            ],
+            [
+              "F",
+              "M20x1.5P single"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Sensor MOC",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "Monel"
+            ],
+            [
+              "3",
+              "Hastelloy C"
+            ],
+            [
+              "4",
+              "Teflon backup"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Wetted parts MOC",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "Monel"
+            ],
+            [
+              "3",
+              "Hastelloy C"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Optional features",
+          "options": [
+            [
+              "\u2014",
+              "Calibration/material cert. / SS304 tag plate / wall-mount plate / 2\" pipe U-clamp"
+            ]
+          ]
+        }
+      ],
+      "rangeTable": {
+        "title": "WD / FD range table",
+        "rows": [
+          [
+            "1",
+            "mmWC",
+            "30 to 200"
+          ],
+          [
+            "2",
+            "mmWC",
+            "50 to 600"
+          ],
+          [
+            "3",
+            "mmWC",
+            "100 to 1000"
+          ],
+          [
+            "4",
+            "mmWC",
+            "250 to 2000"
+          ],
+          [
+            "5",
+            "mmWC",
+            "500 to 6000"
+          ],
+          [
+            "G",
+            "kg/cm\u00b2 & bar",
+            "0.2 to 2"
+          ],
+          [
+            "I",
+            "kg/cm\u00b2 & bar",
+            "0.4 to 4"
+          ],
+          [
+            "K",
+            "kg/cm\u00b2 & bar",
+            "0.6 to 6"
+          ],
+          [
+            "M",
+            "kg/cm\u00b2 & bar",
+            "1 to 10"
+          ],
+          [
+            "N",
+            "kg/cm\u00b2 & bar",
+            "1.6 to 16"
+          ],
+          [
+            "O",
+            "kg/cm\u00b2 & bar",
+            "2.5 to 25"
+          ]
+        ]
+      },
+      "deviations": [
+        "Individual WD datasheet: ambient \u221210\u202660\u00b0C, PG13.5 gland only. Mailer \"Weatherproof Differential Pressure Switch\": range quoted as 0.1\u201325 bar, ambient \u221220\u202665\u00b0C, wider cable-entry choice. Same discrepancy pattern as WP \u2014 confirm ambient rating for the exact configuration."
+      ]
+    },
+    {
+      "model": "FD",
+      "family": "Flameproof Differential Pressure Switch",
+      "category": "dp_switch",
+      "blurb": "Ex d IIC hazardous-area version of the DP switch for filters/compressor lines in classified plant.",
+      "valMin": 0.003,
+      "valMax": 25,
+      "tempMax": 130,
+      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S.",
+      "output": "switch",
+      "hazardous": "flameproof",
+      "connection": "1/4\" NPT(F), double compression cable gland",
+      "industries": [
+        "Oil & gas",
+        "Refineries",
+        "Power plants",
+        "Steel plants",
+        "Petro-chemicals",
+        "Fertilizers",
+        "Cement industry",
+        "Glass industry"
+      ],
+      "keywords": [
+        "filter blockage",
+        "compressor",
+        "hazardous area"
+      ],
+      "extraSpec": {
+        "Sensor / wetted material options": "SS316 (standard) / Monel / Hastelloy C / Teflon backup (sensor); SS316 / Monel / Hastelloy C (wetted parts)"
+      },
+      "orderCode": {
+        "skeleton": "FD\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
+        "example": "FD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2\u20132 kg/cm\u00b2, 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor/wetted parts"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Model",
+          "options": [
+            [
+              "FD",
+              "Flameproof differential pressure switch"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Mounting",
+          "options": [
+            [
+              "1",
+              "Direct bottom"
+            ],
+            [
+              "2",
+              "Surface bottom"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Process connection size",
+          "options": [
+            [
+              "A",
+              "1/4\""
+            ],
+            [
+              "B",
+              "3/8\""
+            ],
+            [
+              "C",
+              "1/2\""
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Process connection type",
+          "options": [
+            [
+              "A",
+              "NPT (M)"
+            ],
+            [
+              "B",
+              "BSP (M)"
+            ],
+            [
+              "C",
+              "BSPT (M)"
+            ],
+            [
+              "D",
+              "NPT (F)"
+            ],
+            [
+              "E",
+              "BSP (F)"
+            ],
+            [
+              "F",
+              "BSPT (F)"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Range",
+          "options": [
+            [
+              "\u2014",
+              "See range table below"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Units",
+          "options": [
+            [
+              "1",
+              "Kg/sq.cm dual scale with bar"
+            ],
+            [
+              "2",
+              "mBar dual scale with mmWC"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Microswitch",
+          "options": [
+            [
+              "\u2014",
+              "See microswitch table below"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Cable entry (double-compression only)",
+          "options": [
+            [
+              "B",
+              "3/4\" ET double"
+            ],
+            [
+              "D",
+              "1/2\" NPT double"
+            ],
+            [
+              "G",
+              "M20x1.5P double"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Sensor MOC",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "Monel"
+            ],
+            [
+              "3",
+              "Hastelloy C"
+            ],
+            [
+              "4",
+              "Teflon backup"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Wetted parts MOC",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "Monel"
+            ],
+            [
+              "3",
+              "Hastelloy C"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Optional features",
+          "options": [
+            [
+              "\u2014",
+              "Calibration/material cert. / Gr.IIA,IIB or Gr.IIC enclosure protection / SS304 tag plate / wall or pipe mounting"
+            ]
+          ]
+        }
+      ],
+      "rangeTable": {
+        "title": "WD / FD range table",
+        "rows": [
+          [
+            "1",
+            "mmWC",
+            "30 to 200"
+          ],
+          [
+            "2",
+            "mmWC",
+            "50 to 600"
+          ],
+          [
+            "3",
+            "mmWC",
+            "100 to 1000"
+          ],
+          [
+            "4",
+            "mmWC",
+            "250 to 2000"
+          ],
+          [
+            "5",
+            "mmWC",
+            "500 to 6000"
+          ],
+          [
+            "G",
+            "kg/cm\u00b2 & bar",
+            "0.2 to 2"
+          ],
+          [
+            "I",
+            "kg/cm\u00b2 & bar",
+            "0.4 to 4"
+          ],
+          [
+            "K",
+            "kg/cm\u00b2 & bar",
+            "0.6 to 6"
+          ],
+          [
+            "M",
+            "kg/cm\u00b2 & bar",
+            "1 to 10"
+          ],
+          [
+            "N",
+            "kg/cm\u00b2 & bar",
+            "1.6 to 16"
+          ],
+          [
+            "O",
+            "kg/cm\u00b2 & bar",
+            "2.5 to 25"
+          ]
+        ]
+      },
+      "deviations": [
+        "Same ambient-rating discrepancy pattern as WD between the individual datasheet and the general mailer."
+      ]
+    },
+    {
+      "model": "\u2014",
+      "family": "Weatherproof Temperature Switch",
+      "category": "temp_switch",
+      "noCode": true,
+      "blurb": "Gas-filled capillary temperature switch, safe-area, adjustable set point, up to 5 m armoured capillary. Only documented in the general Pressure Switch mailer \u2014 no dedicated datasheet or model code supplied.",
+      "valMin": 10,
+      "valMax": 300,
+      "tempMax": 300,
+      "accuracy": "\u00b13% F.S.",
+      "output": "switch",
+      "hazardous": "safe",
+      "connection": "Fixed/adjustable 3/8\" or 1/2\" BSP or NPT",
+      "industries": [
+        "Boilers",
+        "Power",
+        "Steel",
+        "Pharma",
+        "Chemical industries",
+        "Railways",
+        "Projects",
+        "Machine tools"
+      ],
+      "keywords": [
+        "capillary",
+        "thermostat"
+      ],
+      "extraSpec": {
+        "Switch options": "1SPDT/2SPDT/DPDT, silver/gold/hermetically sealed contact",
+        "Cable entry": "3/4\" ET or 1/2\" NPT single comp. gland"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "rangeTable": null,
+      "deviations": [
+        "No dedicated datasheet or segmented order code was supplied for this product \u2014 everything here is transcribed from the general Pressure Switch mailer only. Treat range/accuracy figures as indicative until confirmed by the factory."
+      ]
+    },
+    {
+      "model": "\u2014",
+      "family": "Flame/Explosion Proof Temperature Switch",
+      "category": "temp_switch",
+      "noCode": true,
+      "blurb": "Ex d IIA/IIB/IIC hazardous-area version of the capillary temperature switch. Only documented in the general mailer \u2014 no dedicated datasheet or model code supplied.",
+      "valMin": 10,
+      "valMax": 300,
+      "tempMax": 300,
+      "accuracy": "\u00b13% F.S.",
+      "output": "switch",
+      "hazardous": "flameproof",
+      "connection": "Fixed/adjustable 3/8\" or 1/2\" BSP or NPT",
+      "industries": [
+        "Petro-chemicals",
+        "Oil & gas",
+        "Refineries",
+        "Fire fighting"
+      ],
+      "keywords": [
+        "capillary",
+        "hazardous area",
+        "thermostat"
+      ],
+      "extraSpec": {
+        "Switch options": "1SPDT/2SPDT/DPDT, silver/gold/hermetically sealed contact",
+        "Cable entry": "3/4\" ET or 1/2\" NPT double comp. gland"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "rangeTable": null,
+      "deviations": [
+        "Same caveat as the weatherproof version \u2014 mailer-only source, no dedicated datasheet or code table supplied."
+      ]
+    },
+    {
+      "model": "LT",
+      "family": "Top-Mounted Level Switch",
+      "category": "level_switch",
+      "blurb": "Float/reed on-off level switch entering from the top of the vessel; up to 4 set points on one probe.",
+      "valMin": 300,
+      "valMax": 3000,
+      "tempMax": 100,
+      "accuracy": "Switching differential fixed 10\u00b15 mm",
+      "output": "switch",
+      "hazardous": "both",
+      "connection": "Flanged (92 mm PCD round/square/forged, or 1\"\u20133\" RF 150#/300#) or 1\" NPT/BSP(M)",
+      "industries": [
+        "Power plants",
+        "Chemical industries",
+        "Water treatment plants",
+        "Hydro-pneumatic tanks",
+        "Petrochemicals",
+        "Ship building industry",
+        "Offshore oil rigs"
+      ],
+      "keywords": [
+        "float switch",
+        "high low alarm",
+        "tank"
+      ],
+      "extraSpec": {
+        "Min. specific gravity": "0.7"
+      },
+      "orderCode": {
+        "skeleton": "LT\u2013ProcessConn\u2013ProbeLength\u2013ReedSwitch\u2013SetPoints\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
+        "example": "LTBA11E111-0000 = 92mm PCD sq. flange, 300 mm probe, 1 SPST, 1 set point, PG13.5 single gland, 28 mm float, weatherproof, SS316"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Model",
+          "options": [
+            [
+              "LT",
+              "Top-mounted level switch"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Process connection",
+          "options": [
+            [
+              "B",
+              "92mm PCD square flange"
+            ],
+            [
+              "A",
+              "92mm PCD round flange"
+            ],
+            [
+              "C",
+              "92mm PCD sq. flange, forged"
+            ],
+            [
+              "K",
+              "1\" NPT (M)"
+            ],
+            [
+              "M",
+              "1\" BSP (M)"
+            ],
+            [
+              "D",
+              "1\" RF 150# ANSI B16.5"
+            ],
+            [
+              "F",
+              "2\" RF 150#"
+            ],
+            [
+              "H",
+              "3\" RF 150#"
+            ],
+            [
+              "I",
+              "3\" RF 300#"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Probe length",
+          "options": [
+            [
+              "A",
+              "300 mm"
+            ],
+            [
+              "B",
+              "400 mm"
+            ],
+            [
+              "C",
+              "500 mm"
+            ],
+            [
+              "D",
+              "600 mm"
+            ],
+            [
+              "E",
+              "700 mm"
+            ],
+            [
+              "F",
+              "800 mm"
+            ],
+            [
+              "G",
+              "900 mm"
+            ],
+            [
+              "H",
+              "1000 mm"
+            ],
+            [
+              "I",
+              "1500 mm"
+            ],
+            [
+              "J",
+              "2000 mm"
+            ],
+            [
+              "K",
+              "2500 mm"
+            ],
+            [
+              "L",
+              "3000 mm"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Reed switch",
+          "options": [
+            [
+              "1",
+              "1 SPST, silver contact, 0.5A/125VAC"
+            ],
+            [
+              "2",
+              "1 SPDT, silver contact, 0.5A/125VAC"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Set point",
+          "options": [
+            [
+              "1",
+              "1 set point"
+            ],
+            [
+              "2",
+              "2 set points"
+            ],
+            [
+              "3",
+              "3 set points"
+            ],
+            [
+              "4",
+              "4 set points"
+            ],
+            [
+              "5",
+              "5 set points"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Cable entry",
+          "options": [
+            [
+              "A",
+              "3/4\" ET single"
+            ],
+            [
+              "B",
+              "3/4\" ET double"
+            ],
+            [
+              "C",
+              "1/2\" NPT single"
+            ],
+            [
+              "D",
+              "1/2\" NPT double"
+            ],
+            [
+              "E",
+              "PG13.5 single"
+            ],
+            [
+              "F",
+              "M20x1.5P single"
+            ],
+            [
+              "G",
+              "M20x1.5P double"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Float dimension",
+          "options": [
+            [
+              "1",
+              "28 mm dia. / 28 mm length (up to 2 set points)"
+            ],
+            [
+              "2",
+              "52 mm dia. / 52 mm length (up to 4 set points)"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Enclosure",
+          "options": [
+            [
+              "1",
+              "Aluminium, weatherproof IP67"
+            ],
+            [
+              "2",
+              "Aluminium, flameproof IP66 Gr.IIA/IIB"
+            ],
+            [
+              "3",
+              "Aluminium, explosion-proof IP66 Gr.IIC"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Float/stem/connection MOC + optionals",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "PVDF"
+            ],
+            [
+              "\u2014",
+              "Optional: calibration/material test cert. 3.1, SS304 or SS316 tag plate"
+            ]
+          ]
+        }
+      ],
+      "rangeTable": null,
+      "deviations": []
+    },
+    {
+      "model": "LS",
+      "family": "Side-Mounted Level Switch (standard)",
+      "category": "level_switch",
+      "blurb": "Side-entry float switch for a single high/low point, up to 120\u00b0C standard duty.",
+      "valMin": 180,
+      "valMax": 180,
+      "tempMax": 120,
+      "accuracy": "Differential fixed 3\u201330 mm (max); adjustable 40\u2013250 mm (optional)",
+      "output": "switch",
+      "hazardous": "both",
+      "connection": "Flanged (92 mm PCD) or 1\" NPT/BSP(M)",
+      "industries": [
+        "Power plants",
+        "Chemicals industries",
+        "Water treatment plant",
+        "Hydro-pneumatic tanks",
+        "Petrochemical",
+        "Ship building industry",
+        "Offshore oil rigs"
+      ],
+      "keywords": [
+        "float switch",
+        "interlock",
+        "side entry"
+      ],
+      "extraSpec": {
+        "Min. specific gravity": "0.6 (depends on float material/dimension)",
+        "Min. insertion depth": "180 mm"
+      },
+      "orderCode": {
+        "skeleton": "LS\u2013ProcessConn\u2013Microswitch\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
+        "example": "LSB1E111-0000 = 92mm PCD sq. flange, 2 SPDT general purpose, PG13.5 single gland, 50/120 float, weatherproof LM24, SS316"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Model",
+          "options": [
+            [
+              "LS",
+              "Side-mounted level switch (standard, \u2264120\u00b0C)"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Process connection",
+          "options": [
+            [
+              "B",
+              "92mm PCD square flange"
+            ],
+            [
+              "A",
+              "92mm PCD round flange"
+            ],
+            [
+              "C",
+              "92mm PCD sq. flange, forged"
+            ],
+            [
+              "K",
+              "1\" NPT (M)"
+            ],
+            [
+              "M",
+              "1\" BSP (M)"
+            ],
+            [
+              "D",
+              "1\" RF 150#"
+            ],
+            [
+              "F",
+              "2\" RF 150#"
+            ],
+            [
+              "H",
+              "3\" RF 150#"
+            ],
+            [
+              "I",
+              "3\" RF 300#"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Microswitch",
+          "options": [
+            [
+              "A",
+              "1 SPDT general purpose, 5-15A/250VAC"
+            ],
+            [
+              "B",
+              "2 SPDT general purpose, 5-15A/250VAC"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Cable entry",
+          "options": [
+            [
+              "A",
+              "3/4\" ET single"
+            ],
+            [
+              "B",
+              "3/4\" ET double"
+            ],
+            [
+              "C",
+              "1/2\" NPT single"
+            ],
+            [
+              "D",
+              "1/2\" NPT double"
+            ],
+            [
+              "E",
+              "PG13.5 single"
+            ],
+            [
+              "F",
+              "M20x1.5P single"
+            ],
+            [
+              "G",
+              "M20x1.5P double"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Float dimension",
+          "options": [
+            [
+              "1",
+              "50 mm dia. / 120 mm length"
+            ],
+            [
+              "2",
+              "50 mm dia. / 150 mm length"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Enclosure",
+          "options": [
+            [
+              "1",
+              "Die-cast aluminium, weatherproof LM24"
+            ],
+            [
+              "2",
+              "Die-cast aluminium, flameproof IP67 Gr.IIA/IIB"
+            ],
+            [
+              "3",
+              "Die-cast aluminium, explosion-proof IP67 Gr.IIC"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Float/stem/connection MOC + optionals",
+          "options": [
+            [
+              "1",
+              "SS316"
+            ],
+            [
+              "2",
+              "PVDF"
+            ],
+            [
+              "\u2014",
+              "Optional: calibration/material test cert. 3.1 (standard), SS304 or SS316 tag plate"
+            ]
+          ]
+        }
+      ],
+      "rangeTable": null,
+      "deviations": [
+        "Listed separately from the high-temperature \"LH\" variant below \u2014 do not use this entry for duty above 120\u00b0C."
+      ]
+    },
+    {
+      "model": "LH",
+      "family": "Side-Mounted Level Switch (high-temperature)",
+      "category": "level_switch",
+      "blurb": "Same LS body, rated for high-temperature service up to 350\u00b0C (optional max) \u2014 order code prefix LH instead of LS, same segment structure.",
+      "valMin": 180,
+      "valMax": 180,
+      "tempMax": 350,
+      "accuracy": "Differential fixed 3\u201330 mm (max); adjustable 40\u2013250 mm (optional)",
+      "output": "switch",
+      "hazardous": "both",
+      "connection": "Flanged (92 mm PCD) or 1\" NPT/BSP(M)",
+      "industries": [
+        "Power plants",
+        "Chemicals industries",
+        "Petrochemical",
+        "Ship building industry",
+        "Offshore oil rigs"
+      ],
+      "keywords": [
+        "float switch",
+        "high temperature",
+        "interlock"
+      ],
+      "extraSpec": {
+        "Min. insertion depth": "180 mm"
+      },
+      "orderCode": {
+        "skeleton": "LH\u2013ProcessConn\u2013Microswitch\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
+        "example": "Same segment pattern and codes as LS (see LS code table), with LH model prefix"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Model",
+          "options": [
+            [
+              "LH",
+              "Side-mounted level switch (high-temperature, to 350\u00b0C optional max)"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Process connection",
+          "options": [
+            [
+              "\u2014",
+              "Same options as LS \u2014 see LS code table"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Microswitch",
+          "options": [
+            [
+              "\u2014",
+              "Same options as LS"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Cable entry",
+          "options": [
+            [
+              "\u2014",
+              "Same options as LS"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Float dimension",
+          "options": [
+            [
+              "\u2014",
+              "Same options as LS"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Enclosure",
+          "options": [
+            [
+              "\u2014",
+              "Same options as LS"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Float/stem/connection MOC + optionals",
+          "options": [
+            [
+              "\u2014",
+              "Same options as LS"
+            ]
+          ]
+        }
+      ],
+      "rangeTable": null,
+      "deviations": [
+        "The 350\u00b0C figure is described in the datasheet as an \"optional max\" for the high-temperature mode \u2014 confirm the exact continuous rating required with the factory before quoting."
+      ]
+    },
+    {
+      "model": "FMLG-TB",
+      "family": "Tubular Level Indicator",
+      "category": "level_gauge",
+      "blurb": "Simplest glass-tube visual level indicator, side-mounted, isolating/drain/vent valves built in.",
+      "valMin": 0,
+      "valMax": 4000,
+      "tempMax": 100,
+      "accuracy": "Visibility = C-C minus 150 mm",
+      "output": "visual",
+      "hazardous": "safe",
+      "connection": "Flanged or screwed, up to 15 kg/cm\u00b2",
+      "industries": [
+        "Chemical/process industry",
+        "Marine/shipping (tank gauging)",
+        "Water treatment/dosing",
+        "Fertilizer",
+        "Chemical storage"
+      ],
+      "keywords": [
+        "sight glass",
+        "batching tank",
+        "low pressure"
+      ],
+      "extraSpec": {
+        "Body/valve material options": "CS / SS304 / SS316 / PP / PVDF",
+        "Glass": "Heavy-walled borosilicate, H-19/16 Teflon packing"
+      },
+      "orderCode": {
+        "skeleton": "FMLG-TB\u2013Mounting\u2013BodyMaterial\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013ScaleMaterial\u2013CtoC / Options",
+        "example": "FMLG-TB-SD-4S-F501-V1-V2-AL-L0800 = side mount, SS304 channel, 1/2\" 150# RF flange, 800 mm C-C"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Mounting",
+          "options": [
+            [
+              "SD",
+              "Side"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Body material",
+          "options": [
+            [
+              "CS",
+              "Carbon steel"
+            ],
+            [
+              "4S",
+              "AISI 304 SS channel"
+            ],
+            [
+              "SS",
+              "AISI 316 SS channel"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Process connection",
+          "options": [
+            [
+              "5NM/5NF",
+              "1/2\" NPT (M)/(F)"
+            ],
+            [
+              "7NM/7NF",
+              "3/4\" NPT (M)/(F)"
+            ],
+            [
+              "1NM/1NF",
+              "1\" NPT (M)/(F)"
+            ],
+            [
+              "5BM/5BF",
+              "1/2\" BSP (M)/(F)"
+            ],
+            [
+              "7BM/7BF",
+              "3/4\" BSP (M)/(F)"
+            ],
+            [
+              "1BM/1BF",
+              "1\" BSP (M)/(F)"
+            ],
+            [
+              "F501-F306",
+              "Flanged 1/2\"-3\", 150#/300#/600# RF"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Top side vent",
+          "options": [
+            [
+              "V1/V2/V3",
+              "Plug, 1/2\"/3/4\"/1\" NPT (M)"
+            ],
+            [
+              "V4/V5",
+              "Valve, 1/2\"/3/4\" NPT (F)"
+            ],
+            [
+              "F501-F306",
+              "Flanged"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Bottom side drain",
+          "options": [
+            [
+              "V1-V5",
+              "Same options as top vent"
+            ],
+            [
+              "F501-F306",
+              "Flanged"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Material of scale",
+          "options": [
+            [
+              "AL",
+              "Aluminium (standard)"
+            ],
+            [
+              "4S",
+              "AISI 304 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Centre-to-centre distance",
+          "options": [
+            [
+              "L####",
+              "Specify in mm, e.g. L0800 for 800 mm"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Options",
+          "options": [
+            [
+              "BB",
+              "Ball valve, bolted bonnet type"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMLG-MG",
+      "family": "Magnetic Level Indicator (capsule type)",
+      "category": "level_gauge",
+      "blurb": "Bypass magnetic float indicator for corrosive/toxic media. The indicator itself is not Ex-certified; an optional Ex-proof magnetic switch accessory is available if a hazardous-area signal is needed.",
+      "valMin": 0,
+      "valMax": 6000,
+      "tempMax": 400,
+      "accuracy": "\u00b110 mm measuring error",
+      "output": "visual",
+      "hazardous": "safe",
+      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm\u00b2",
+      "industries": [
+        "Chemical processing (hazardous reactors)",
+        "Fertilizer (ammonia storage)",
+        "Chemical/acid handling",
+        "Petrochemical (toxic solvent lines)",
+        "Power generation (boiler feedwater)"
+      ],
+      "keywords": [
+        "bypass gauge",
+        "corrosive",
+        "glandless"
+      ],
+      "extraSpec": {
+        "Wetted parts": "AISI 316 SS or 316L SS"
+      },
+      "orderCode": {
+        "skeleton": "FMLG-MG\u2013Mounting\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013Drain\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
+        "example": "FMLG-MG-SD-SS-T1-P3-V4-D1-F501-L1000-AL-RW-2-2 = side mount, SS316, 0-50 kg/cm\u00b2, 1000 mm C-C, 2 Ex-proof switches"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Mounting",
+          "options": [
+            [
+              "TP",
+              "Top"
+            ],
+            [
+              "SD",
+              "Side"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Wetted parts",
+          "options": [
+            [
+              "SS",
+              "AISI 316 SS"
+            ],
+            [
+              "SL",
+              "AISI 316L SS"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Temperature range",
+          "options": [
+            [
+              "T1",
+              "-20 to 120\u00b0C"
+            ],
+            [
+              "T2",
+              "-20 to 400\u00b0C (with cooling fins)"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Pressure range",
+          "options": [
+            [
+              "P1",
+              "0-10 kg/cm\u00b2"
+            ],
+            [
+              "P2",
+              "0-25 kg/cm\u00b2"
+            ],
+            [
+              "P3",
+              "0-50 kg/cm\u00b2"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Vent",
+          "options": [
+            [
+              "V1/V2/V3",
+              "Screwed cap + plug, 1/2\"/3/4\"/1\" NPT (M)"
+            ],
+            [
+              "V4/V5",
+              "Screwed cap + valve, 1/2\"/3/4\" NPT (F)"
+            ],
+            [
+              "V6",
+              "Single flanged (top mounted)"
+            ],
+            [
+              "V7-V9",
+              "Welded flat top + plug"
+            ],
+            [
+              "V10/V11",
+              "Welded flat top + valve"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Drain",
+          "options": [
+            [
+              "D1-D3",
+              "Dual flange + plug, 1/2\"/3/4\"/1\" NPT (M)"
+            ],
+            [
+              "D4/D5",
+              "Dual flange + valve"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Process connection",
+          "options": [
+            [
+              "5NM-1BF",
+              "Screwed 1/2\"-1\" NPT/BSP (side mounting only)"
+            ],
+            [
+              "F501-F306",
+              "Flanged 1/2\"-3\""
+            ],
+            [
+              "XXX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Centre-to-centre distance",
+          "options": [
+            [
+              "L####",
+              "Specify in mm"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Material of scale",
+          "options": [
+            [
+              "AL",
+              "Aluminium (standard)"
+            ],
+            [
+              "4S",
+              "AISI 304 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Flag colour",
+          "options": [
+            [
+              "BW",
+              "Blue & white"
+            ],
+            [
+              "RW",
+              "Red & white"
+            ],
+            [
+              "KW",
+              "Black & white"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Magnetic switches (optional)",
+          "options": [
+            [
+              "1",
+              "One"
+            ],
+            [
+              "2",
+              "Two"
+            ],
+            [
+              "3",
+              "Three"
+            ]
+          ]
+        },
+        {
+          "seg": 12,
+          "name": "Switch housing (optional)",
+          "options": [
+            [
+              "1",
+              "SPST reed switch, general purpose housing"
+            ],
+            [
+              "2",
+              "SPDT micro switch, IP65 housing"
+            ],
+            [
+              "3",
+              "SPDT micro switch, Ex-proof housing"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMLG-BM",
+      "family": "Bi-Colour Magnetic Level Indicator",
+      "category": "level_gauge",
+      "blurb": "Bypass gauge with bi-colour flag to distinguish liquid from vapour at a glance; up to 400\u00b0C. Indicator body is not itself Ex-certified; optional Ex-proof switch accessory available.",
+      "valMin": 0,
+      "valMax": 6000,
+      "tempMax": 400,
+      "accuracy": "\u00b110 mm measuring error",
+      "output": "visual",
+      "hazardous": "safe",
+      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm\u00b2",
+      "industries": [
+        "Petrochemical/refining (distillation columns)",
+        "Oil & gas / LPG (pressurised storage)",
+        "Specialty chemicals",
+        "Chemical interface/colour-change monitoring"
+      ],
+      "keywords": [
+        "distillation column",
+        "LPG bullet",
+        "interface"
+      ],
+      "extraSpec": {
+        "Wetted parts": "AISI 316 SS or 316L SS"
+      },
+      "orderCode": {
+        "skeleton": "FMLG-BM\u2013Mounting\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013Drain\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
+        "example": "FMLG-BM-TP-SL-T2-P2-V6-D2-F103-L2000-4S-BW-1-1 = top mount, SS316L, 2000 mm C-C"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Mounting",
+          "options": [
+            [
+              "TP",
+              "Top"
+            ],
+            [
+              "SD",
+              "Side"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Wetted parts",
+          "options": [
+            [
+              "SS",
+              "AISI 316 SS"
+            ],
+            [
+              "SL",
+              "AISI 316L SS"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Temperature range",
+          "options": [
+            [
+              "T1",
+              "-20 to 120\u00b0C"
+            ],
+            [
+              "T2",
+              "-20 to 400\u00b0C"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Pressure range",
+          "options": [
+            [
+              "P1",
+              "0-10 kg/cm\u00b2"
+            ],
+            [
+              "P2",
+              "0-25 kg/cm\u00b2"
+            ],
+            [
+              "P3",
+              "0-50 kg/cm\u00b2"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Vent",
+          "options": [
+            [
+              "V1-V11",
+              "Same pattern as FMLG-MG"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Drain",
+          "options": [
+            [
+              "D1-D5",
+              "Same pattern as FMLG-MG"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Process connection",
+          "options": [
+            [
+              "5NM-1BF / F501-F306",
+              "Screwed or flanged"
+            ],
+            [
+              "XXX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Centre-to-centre distance",
+          "options": [
+            [
+              "L####",
+              "Specify in mm"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Material of scale",
+          "options": [
+            [
+              "AL",
+              "Aluminium"
+            ],
+            [
+              "4S",
+              "AISI 304 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Flag colour",
+          "options": [
+            [
+              "BW",
+              "Blue & white"
+            ],
+            [
+              "RW",
+              "Red & white"
+            ],
+            [
+              "KW",
+              "Black & white"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Magnetic switches (optional)",
+          "options": [
+            [
+              "1",
+              "One"
+            ],
+            [
+              "2",
+              "Two"
+            ],
+            [
+              "3",
+              "Three"
+            ]
+          ]
+        },
+        {
+          "seg": 12,
+          "name": "Switch housing (optional)",
+          "options": [
+            [
+              "1",
+              "SPST reed, general purpose"
+            ],
+            [
+              "2",
+              "SPDT micro, IP65"
+            ],
+            [
+              "3",
+              "SPDT micro, Ex-proof"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMLG-TM",
+      "family": "Top-Mounted Magnetic Level Indicator",
+      "category": "level_gauge",
+      "blurb": "Top-entry bypass gauge for pits, sumps and tanks with no side access. Indicator body is not itself Ex-certified; optional Ex-proof switch accessory available.",
+      "valMin": 0,
+      "valMax": 6000,
+      "tempMax": 400,
+      "accuracy": "\u00b110 mm measuring error",
+      "output": "visual",
+      "hazardous": "safe",
+      "connection": "Flanged, top mount only, up to 50 kg/cm\u00b2",
+      "industries": [
+        "Hazardous/chemical waste pits",
+        "Effluent/neutralisation sumps",
+        "Floor-drain containment tanks",
+        "Underground/sump tanks with no side access"
+      ],
+      "keywords": [
+        "sump",
+        "top entry",
+        "containment"
+      ],
+      "extraSpec": {
+        "Wetted parts": "AISI 316 SS or 316L SS"
+      },
+      "orderCode": {
+        "skeleton": "FMLG-TM\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
+        "example": "FMLG-TM-SS-T1-P1-V6-F501-L1500-AL-KW-1-1 = SS316, 1500 mm C-C, top mount only"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Wetted parts",
+          "options": [
+            [
+              "SS",
+              "AISI 316 SS"
+            ],
+            [
+              "SL",
+              "AISI 316L SS"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Temperature range",
+          "options": [
+            [
+              "T1",
+              "-20 to 120\u00b0C"
+            ],
+            [
+              "T2",
+              "-20 to 400\u00b0C"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Pressure range",
+          "options": [
+            [
+              "P1",
+              "0-10 kg/cm\u00b2"
+            ],
+            [
+              "P2",
+              "0-25 kg/cm\u00b2"
+            ],
+            [
+              "P3",
+              "0-50 kg/cm\u00b2"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Vent",
+          "options": [
+            [
+              "V1-V11",
+              "Same pattern as FMLG-MG"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Process connection",
+          "options": [
+            [
+              "5NM-1BF / F501-F306",
+              "Screwed or flanged"
+            ],
+            [
+              "XXX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Centre-to-centre distance",
+          "options": [
+            [
+              "L####",
+              "Specify in mm"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Material of scale",
+          "options": [
+            [
+              "AL",
+              "Aluminium"
+            ],
+            [
+              "4S",
+              "AISI 304 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Flag colour",
+          "options": [
+            [
+              "BW",
+              "Blue & white"
+            ],
+            [
+              "RW",
+              "Red & white"
+            ],
+            [
+              "KW",
+              "Black & white"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Magnetic switches (optional)",
+          "options": [
+            [
+              "1",
+              "One"
+            ],
+            [
+              "2",
+              "Two"
+            ],
+            [
+              "3",
+              "Three"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Switch housing (optional)",
+          "options": [
+            [
+              "1",
+              "SPST reed"
+            ],
+            [
+              "2",
+              "SPDT micro IP65"
+            ],
+            [
+              "3",
+              "SPDT micro Ex-proof"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMLG-RF",
+      "family": "Reflex Level Indicator",
+      "category": "level_gauge",
+      "blurb": "High-pressure prismatic reflex glass for clean/colourless liquids in boilers and reactors. Ex-proof/weatherproof jacketing is an available option.",
+      "valMin": 0,
+      "valMax": 6000,
+      "tempMax": 300,
+      "accuracy": "\u00b12 mm",
+      "output": "visual",
+      "hazardous": "both",
+      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm\u00b2 classes",
+      "industries": [
+        "Power generation (steam boiler drums)",
+        "Petrochemical (water/hydrocarbon reactors)",
+        "Chemical processing (solvent distillation)",
+        "Fertilizer (liquid ammonia storage)",
+        "Oil & gas (gas-liquefaction plants)"
+      ],
+      "keywords": [
+        "boiler drum",
+        "high pressure",
+        "prismatic glass"
+      ],
+      "extraSpec": {
+        "Body material options": "CS / ASTM A-105 / SS304 / SS316 / PP (CS reinforced)"
+      },
+      "orderCode": {
+        "skeleton": "FMLG-RF\u2013BodyMaterial\u2013TubeGuard\u2013Gasket\u2013ValveBonnet\u2013ConnOrientation\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013Scale\u2013CtoC / Options",
+        "example": "FMLG-RF-T-T-G5-B3-OR-F501-PN1-PN1-AL-L0800-BV = SS316, bolted bonnet, 800 mm C-C"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Body material",
+          "options": [
+            [
+              "C",
+              "Carbon steel"
+            ],
+            [
+              "S",
+              "AISI 304 SS channel"
+            ],
+            [
+              "T",
+              "AISI 316 SS channel"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Tube guard",
+          "options": [
+            [
+              "C",
+              "Carbon steel"
+            ],
+            [
+              "S",
+              "AISI 304 SS"
+            ],
+            [
+              "T",
+              "AISI 316 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Cushion/gasket",
+          "options": [
+            [
+              "G1",
+              "CAF"
+            ],
+            [
+              "G2",
+              "CNAF"
+            ],
+            [
+              "G3",
+              "PTFE"
+            ],
+            [
+              "G4",
+              "SS304 spiral-wound + graphite"
+            ],
+            [
+              "G5",
+              "SS316 spiral-wound + graphite"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Isolation valve bonnet",
+          "options": [
+            [
+              "B1",
+              "Screwed bonnet, max 85 kg/cm\u00b2"
+            ],
+            [
+              "B2",
+              "Union bonnet, max 165 kg/cm\u00b2"
+            ],
+            [
+              "B3",
+              "Bolted bonnet, max 210 kg/cm\u00b2"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Process connection orientation",
+          "options": [
+            [
+              "OR",
+              "Rear"
+            ],
+            [
+              "OL",
+              "Rear or left"
+            ],
+            [
+              "OS",
+              "Left or right"
+            ],
+            [
+              "OD",
+              "Right"
+            ],
+            [
+              "OV",
+              "Vertical"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Process connection",
+          "options": [
+            [
+              "5NM-1BF",
+              "Screwed 1/2\"-1\""
+            ],
+            [
+              "F501-F306",
+              "Flanged 1/2\"-3\""
+            ],
+            [
+              "XXX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Top side vent",
+          "options": [
+            [
+              "PN1-PN3",
+              "Plug 1/2\"/3/4\"/1\" NPT (M)"
+            ],
+            [
+              "NV4",
+              "Needle valve"
+            ],
+            [
+              "Bv5",
+              "Ball valve"
+            ],
+            [
+              "F501-F306",
+              "Flanged"
+            ],
+            [
+              "XXX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Bottom side drain",
+          "options": [
+            [
+              "\u2014",
+              "Same options as top vent"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Material of scale",
+          "options": [
+            [
+              "AL",
+              "Aluminium"
+            ],
+            [
+              "4S",
+              "AISI 304 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Centre-to-centre distance",
+          "options": [
+            [
+              "L####",
+              "350-3500mm single piece, above two-piece coupled"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Options",
+          "options": [
+            [
+              "BV",
+              "Ball valve, bolted bonnet type"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMLG-TP",
+      "family": "Transparent Level Indicator",
+      "category": "level_gauge",
+      "blurb": "Clear-glass high-pressure gauge for interface tracking and dirty/viscous media where reflex is unsuitable. Ex-proof illuminator option available.",
+      "valMin": 0,
+      "valMax": 6000,
+      "tempMax": 300,
+      "accuracy": "\u00b12 mm",
+      "output": "visual",
+      "hazardous": "both",
+      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm\u00b2 classes",
+      "industries": [
+        "Chemical processing (interface tracking)",
+        "Fertilizer/agrochemical (colour-change batching)",
+        "Chemical processing (dirty/viscous/corrosive media)",
+        "Power generation/water treatment (boiler & condensate)"
+      ],
+      "keywords": [
+        "interface",
+        "viscous",
+        "dirty liquid"
+      ],
+      "extraSpec": {
+        "Sight glass options": "Borosilicate (max 20kg/cm\u00b2, 120\u00b0C) / Ilmadur / Klinger"
+      },
+      "orderCode": {
+        "skeleton": "FMLG-TP\u2013BodyMaterial\u2013CoverMaterial\u2013SightGlass\u2013Gasket\u2013ValveBonnet\u2013ConnOrientation\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013Scale\u2013CtoC / Options",
+        "example": "FMLG-TP-6T-6T-BO-PT-B3-OR-F501-PN1-PN1-AL-L0800-IW = SS316, borosilicate glass, illuminated"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Body material",
+          "options": [
+            [
+              "CS",
+              "Carbon steel"
+            ],
+            [
+              "4S",
+              "AISI 304 SS"
+            ],
+            [
+              "6T",
+              "AISI 316 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Material of cover plates",
+          "options": [
+            [
+              "CS",
+              "Carbon steel"
+            ],
+            [
+              "4S",
+              "AISI 304 SS"
+            ],
+            [
+              "6T",
+              "AISI 316 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Sight glass",
+          "options": [
+            [
+              "BO",
+              "Borosilicate (max 20 kg/cm\u00b2, 120\u00b0C)"
+            ],
+            [
+              "IL",
+              "Ilmadur"
+            ],
+            [
+              "KL",
+              "Klinger"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Gasket",
+          "options": [
+            [
+              "CA",
+              "CAF"
+            ],
+            [
+              "GR",
+              "Graphoil"
+            ],
+            [
+              "PT",
+              "PTFE"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Isolation valve bonnet",
+          "options": [
+            [
+              "B1",
+              "Screwed, max 85 kg/cm\u00b2"
+            ],
+            [
+              "B2",
+              "Union, max 165 kg/cm\u00b2"
+            ],
+            [
+              "B3",
+              "Bolted, max 210 kg/cm\u00b2"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Process connection orientation",
+          "options": [
+            [
+              "OR",
+              "Rear"
+            ],
+            [
+              "OL",
+              "Rear or left"
+            ],
+            [
+              "OS",
+              "Left or right"
+            ],
+            [
+              "OD",
+              "Right"
+            ],
+            [
+              "OV",
+              "Vertical"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Process connection",
+          "options": [
+            [
+              "5NM-1BF",
+              "Screwed"
+            ],
+            [
+              "F501-F306",
+              "Flanged"
+            ],
+            [
+              "XXX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Top side vent",
+          "options": [
+            [
+              "PN1-PN3/NV4/Bv5",
+              "Plug/needle/ball valve"
+            ],
+            [
+              "F501-F306",
+              "Flanged"
+            ],
+            [
+              "XXX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Bottom side drain",
+          "options": [
+            [
+              "\u2014",
+              "Same options as top vent"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Material of scale",
+          "options": [
+            [
+              "AL",
+              "Aluminium"
+            ],
+            [
+              "4S",
+              "AISI 304 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Centre-to-centre distance",
+          "options": [
+            [
+              "L####",
+              "350-3500mm single piece, above two-piece coupled"
+            ]
+          ]
+        },
+        {
+          "seg": 12,
+          "name": "Options",
+          "options": [
+            [
+              "WF",
+              "With anti-frost"
+            ],
+            [
+              "IW",
+              "Illuminator, weatherproof IP65"
+            ],
+            [
+              "IE",
+              "Illuminator, Ex-proof IIA/IIB + IP65"
+            ],
+            [
+              "IX",
+              "Illuminator, Ex-proof IIC + IP65"
+            ],
+            [
+              "BV",
+              "Ball valve, bolted bonnet type"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMLG-WP",
+      "family": "Welded Pad Type Level Indicator",
+      "category": "level_gauge",
+      "blurb": "Welds directly onto the vessel wall \u2014 used where piping-induced thermal error or space constraints rule out a remote gauge.",
+      "valMin": 0,
+      "valMax": 6000,
+      "tempMax": 240,
+      "accuracy": "Per gauge classification table (body/gasket combination)",
+      "output": "visual",
+      "hazardous": "safe",
+      "connection": "Direct weld-on, flat or contoured; up to 40 kg/cm\u00b2 (SS)",
+      "industries": [
+        "Specialty chemicals (crystallization reactors)",
+        "Chemical processing (agitated mixing vessels)",
+        "Chemical/food processing (high-viscosity slurry tanks)",
+        "Mining/minerals processing (solids in suspension)"
+      ],
+      "keywords": [
+        "weld on",
+        "solids in suspension",
+        "no piping"
+      ],
+      "extraSpec": {
+        "Sight glass options": "Borosilicate (max 10kg/cm\u00b2,120\u00b0C) / Ilmadur (max 20,120\u00b0C) / Klinger (max 40,240\u00b0C)"
+      },
+      "orderCode": {
+        "skeleton": "FMLG-WP\u2013ProcessConn(Welded)\u2013BodyMaterial\u2013RetainerCap\u2013SightGlass\u2013Gasket\u2013ORing\u2013Bolts\u2013Length/Sections",
+        "example": "FMLG-WP-W-6T-6T-KL-TF-VT-SS-L1200-1 = SS316, Klinger glass, 1200 mm, single section"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Process connection",
+          "options": [
+            [
+              "W",
+              "Welded"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Body material",
+          "options": [
+            [
+              "CS",
+              "Carbon steel"
+            ],
+            [
+              "6T",
+              "AISI 316 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Retainer cap",
+          "options": [
+            [
+              "S1",
+              "Carbon steel"
+            ],
+            [
+              "6T",
+              "AISI 316 SS"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Sight glass",
+          "options": [
+            [
+              "BO",
+              "Borosilicate, max 10kg/cm\u00b2, 120\u00b0C"
+            ],
+            [
+              "IL",
+              "Ilmadur, max 20kg/cm\u00b2, 120\u00b0C"
+            ],
+            [
+              "KL",
+              "Klinger, max 40kg/cm\u00b2, 240\u00b0C"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Gasket",
+          "options": [
+            [
+              "TF",
+              "Teflon"
+            ],
+            [
+              "GR",
+              "Graphoil"
+            ],
+            [
+              "GY",
+              "Gylon"
+            ],
+            [
+              "BG",
+              "Blue-Gard"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "O-ring",
+          "options": [
+            [
+              "VT",
+              "Viton"
+            ],
+            [
+              "TF",
+              "Teflon"
+            ],
+            [
+              "GR",
+              "Graphite"
+            ],
+            [
+              "BN",
+              "Buna N"
+            ],
+            [
+              "SI",
+              "Silicone"
+            ],
+            [
+              "EP",
+              "EPDM"
+            ],
+            [
+              "XX",
+              "Non-standard"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Retainer cap bolts & set screws",
+          "options": [
+            [
+              "CS",
+              "Carbon steel"
+            ],
+            [
+              "SS",
+              "Stainless steel"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Length / sections",
+          "options": [
+            [
+              "L####-1",
+              "Single section, specify visual length mm"
+            ],
+            [
+              "L####-n",
+              "Multi-section stacked, specify length per section"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMPT-012",
+      "family": "Industrial Pressure Transmitter (strain gauge)",
+      "category": "pressure_transmitter",
+      "blurb": "Entry-level strain-gauge transmitter, wide 0-50 bar to 0-2000 bar range, factory calibrated, no field adjustment.",
+      "valMin": 0,
+      "valMax": 2000,
+      "tempMax": 80,
+      "accuracy": "0.5% F.S. (1% F.S. option)",
+      "output": "4-20mA",
+      "hazardous": "safe",
+      "connection": "G1/4, G1/2, 1/2 NPT, 1/4 NPT, M12x1.5 (custom on request)",
+      "industries": [
+        "Mechanical engineering & machine construction",
+        "Hydraulics & level measurement",
+        "Gas tank & pipeline pressure monitoring",
+        "Industrial process control & test equipment"
+      ],
+      "keywords": [
+        "general purpose",
+        "basic transmitter"
+      ],
+      "extraSpec": {
+        "Output options": "4-20mA, 0-10V, 0-5V, 0.5-4.5V; 1.5mV/V or 2mV/V millivolt variant",
+        "Electrical connector": "Hirschmann (DIN), M12 4-pin/5-pin, gland cable, direct cable",
+        "Housing diameter": "D22/23/26/38 mm"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published \u2014 order by stating range, output signal, process connection, electrical connector and housing size directly. Datasheet cross-referenced against source reference \"PT124B/G-210\"; confirm exact connector/output combination availability with the factory."
+      ]
+    },
+    {
+      "model": "FMPT-212",
+      "family": "Compact Pressure Transmitter (diffused silicon)",
+      "category": "pressure_transmitter",
+      "blurb": "Compact high-precision transmitter with optional RS485 output.",
+      "valMin": -1,
+      "valMax": 400,
+      "tempMax": 80,
+      "accuracy": "0.5% / 0.25% / 0.1% F.S.",
+      "output": "4-20mA",
+      "hazardous": "safe",
+      "connection": "G1/4, G1/2, 1/2 NPT, 1/4 NPT, M12x1.5 (custom on request)",
+      "industries": [
+        "Mechanical engineering & machine construction",
+        "Hydraulics & level measurement",
+        "Gas tank pressure monitoring",
+        "Industrial test & control systems"
+      ],
+      "keywords": [
+        "compact",
+        "vacuum",
+        "RS485"
+      ],
+      "extraSpec": {
+        "Output options": "4-20mA, 0-10V, 0-5V, 1-5V, RS485, 0.5-4.5V; millivolt variant",
+        "Electrical connector": "Hirschmann, M12 4/5/6-pin, gland cable, fly leads/1/2 NPT",
+        "Housing diameter": "D23/26/38 mm"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published. Datasheet cross-referenced against source reference \"PT124B/G-212\"."
+      ]
+    },
+    {
+      "model": "FMPT-412",
+      "family": "Flush Diaphragm Pressure Transmitter",
+      "category": "pressure_transmitter",
+      "blurb": "Flush-face diaphragm avoids port clogging \u2014 for viscous, slurry or particulate-laden media, hermetically welded wetted parts.",
+      "valMin": 0,
+      "valMax": 700,
+      "tempMax": 85,
+      "accuracy": "0.25% / 0.5% F.S.",
+      "output": "4-20mA",
+      "hazardous": "safe",
+      "connection": "G1/2, 1/2 BSP, 1/2 NPT, M22 (custom on request)",
+      "industries": [
+        "Mechanical engineering & general industry",
+        "Hydraulics & pneumatics",
+        "Food & beverage processing",
+        "Chemical & pharmaceutical processing",
+        "Viscous/slurry/particulate media"
+      ],
+      "keywords": [
+        "flush diaphragm",
+        "slurry",
+        "clogging"
+      ],
+      "extraSpec": {
+        "Output options": "4-20mA, 0-10V, 0-5V, 0.5-4.5V; millivolt variant",
+        "Electrical connector": "Hirschmann, M12 4-pin, Bendix connector, cable, 5-pin custom",
+        "Housing diameter": "D22/23/26/38 mm"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published. Datasheet cross-referenced against source reference \"PT124B/G-214, flush diaphragm variant\"."
+      ]
+    },
+    {
+      "model": "FMPT-612",
+      "family": "Pressure Transmitter with LED Display",
+      "category": "pressure_transmitter",
+      "blurb": "Advanced electron-ceramic sensor, local LED display, high overload and impact resistance, low temperature drift.",
+      "valMin": -1,
+      "valMax": 2000,
+      "tempMax": 80,
+      "accuracy": "0.5% F.S.",
+      "output": "4-20mA",
+      "hazardous": "safe",
+      "connection": "G1/4, G1/2, 1/2 NPT, 1/4 NPT, M12x1.5 (custom on request)",
+      "industries": [
+        "Defence industry & scientific research",
+        "Space industry & aerospace",
+        "Petroleum & chemical industry",
+        "Electric power generation & utilities",
+        "Marine & oceanographic applications"
+      ],
+      "keywords": [
+        "LED display",
+        "local indication",
+        "high impact"
+      ],
+      "extraSpec": {
+        "Output": "4-20mA, 2-wire; fault-alarm output optional",
+        "Electrical connector": "Hirschmann (Big DIN)"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published. Datasheet cross-referenced against source reference \"PT124B-216\"."
+      ]
+    },
+    {
+      "model": "FMPT-712",
+      "family": "Pressure Transmitter with Sanitary Clamp",
+      "category": "pressure_transmitter",
+      "blurb": "Clamp-profile hygienic transmitter for clean/aseptic conditions and blockage-prone applications; optional integrated LED display.",
+      "valMin": -1,
+      "valMax": 45,
+      "tempMax": 80,
+      "accuracy": "0.5% F.S.",
+      "output": "4-20mA",
+      "hazardous": "safe",
+      "connection": "1\"/1.5\"/2\" tri-clamp (custom on request)",
+      "industries": [
+        "Process engineering",
+        "Chemical industry",
+        "Food & beverage processing",
+        "Pharmaceutical & biotechnology facilities",
+        "Paper & pulp industry"
+      ],
+      "keywords": [
+        "hygienic",
+        "sanitary",
+        "tri-clamp",
+        "aseptic"
+      ],
+      "extraSpec": {
+        "Wetted parts": "Stainless steel or hardened aluminium",
+        "Electrical connector": "Hirschmann (DIN)"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published for this model."
+      ]
+    },
+    {
+      "model": "FMPT-812",
+      "family": "High-Temperature Pressure Transmitter (cooling element)",
+      "category": "pressure_transmitter",
+      "blurb": "Integrated cooling element permits medium temperatures up to 150\u00b0C at the sensor.",
+      "valMin": -1,
+      "valMax": 1000,
+      "tempMax": 150,
+      "accuracy": "0.5% F.S.",
+      "output": "4-20mA",
+      "hazardous": "safe",
+      "connection": "G1/4, G1/2, 1/2 NPT, 1/4 NPT, M12x1.5 (custom on request)",
+      "industries": [
+        "Mechanical engineering & machine construction",
+        "Hydraulics & level measurement",
+        "Gas tank & pipeline pressure monitoring",
+        "High-temperature process applications"
+      ],
+      "keywords": [
+        "high temperature",
+        "cooling element"
+      ],
+      "extraSpec": {
+        "Output options": "4-20mA, 0-5V, 0.5-4.5V (3-wire)",
+        "Electrical connector": "Hirschmann, M12 4-pin, Bendix connector, cable"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published. Datasheet cross-referenced against source reference \"PT124B-218\"."
+      ]
+    },
+    {
+      "model": "FMPT-6000",
+      "family": "Smart Gauge/Absolute Pressure Transmitter",
+      "category": "smart_pressure_transmitter",
+      "blurb": "HART or Modbus-RTU smart transmitter, GP and AP versions, monocrystalline silicon sensor, 100:1 turn-down.",
+      "valMin": -1,
+      "valMax": 400,
+      "tempMax": 85,
+      "accuracy": "GP \u00b10.075% to \u00b10.2% URL; AP \u00b10.1% to \u00b10.2% URL",
+      "output": "hart",
+      "hazardous": "safe",
+      "connection": "M20x1.5, G1/2, G1/4, 1/2/1/4 NPT + adapters",
+      "industries": [
+        "Oil & gas industry",
+        "Food processing",
+        "Pulp & paper",
+        "Power & energy",
+        "Chemical industry",
+        "Marine equipment"
+      ],
+      "keywords": [
+        "HART",
+        "Modbus",
+        "gauge pressure",
+        "absolute pressure"
+      ],
+      "extraSpec": {
+        "Certification": "Contact Forbes Marshall for current hazardous-area/regulatory approval status (none listed as standard)"
+      },
+      "orderCode": {
+        "skeleton": "FMPT-6000\u2013GP/AP\u2013[Range+Diaphragm+Fill+Seal]\u2013CableOutlet\u2013[Signal+Display]\u2013ProcessConn / Options",
+        "example": "FMPT-6000-GP-S105GSSF-R2-HC-M01/B7 = 0-10 bar gauge, SS316L, silicone fill, HART + LCD, M20, U-bracket"
+      },
+      "codeTable": [
+        {
+          "seg": "Model",
+          "name": "Product",
+          "options": [
+            [
+              "FMPT-6000-GP",
+              "Gauge pressure"
+            ],
+            [
+              "FMPT-6000-AP",
+              "Absolute pressure"
+            ]
+          ]
+        },
+        {
+          "seg": "Sensor",
+          "name": "Range",
+          "options": [
+            [
+              "GP",
+              "0.4/2.5/10/30/100/400 bar"
+            ],
+            [
+              "AP",
+              "0.4/2.5/10/100 bar"
+            ]
+          ]
+        },
+        {
+          "seg": "Sensor",
+          "name": "Diaphragm / fill oil / seal",
+          "options": [
+            [
+              "S/H/L",
+              "Diaphragm: SS316L / Hastelloy C / gold-plated SS316L"
+            ],
+            [
+              "S/D",
+              "Fill: silicone oil / inert filler"
+            ],
+            [
+              "F/S",
+              "Seal: SS welded / Viton O-ring"
+            ]
+          ]
+        },
+        {
+          "seg": "Electrical",
+          "name": "Cable outlet",
+          "options": [
+            [
+              "R1",
+              "Waterproof connector M20x1.5"
+            ],
+            [
+              "R2",
+              "Flameproof 1/2 NPT (F)"
+            ],
+            [
+              "R3",
+              "Flameproof M20x1.5 (F)"
+            ],
+            [
+              "R7",
+              "Flameproof G1/2 (F)"
+            ]
+          ]
+        },
+        {
+          "seg": "Output",
+          "name": "Signal / display",
+          "options": [
+            [
+              "H",
+              "4-20mA + HART"
+            ],
+            [
+              "B",
+              "4-20mA + HART, intrinsically safe"
+            ],
+            [
+              "R",
+              "Modbus-RTU/RS-485"
+            ],
+            [
+              "A/C",
+              "No LCD / with LCD"
+            ]
+          ]
+        },
+        {
+          "seg": "Process",
+          "name": "Connection",
+          "options": [
+            [
+              "M01/M10",
+              "M20x1.5 (M)/(F)"
+            ],
+            [
+              "G01/G02",
+              "G1/2 (M)/G1/4 (M)"
+            ],
+            [
+              "R01/R03",
+              "1/2-14 NPT (M)/(F)"
+            ],
+            [
+              "R02/R04",
+              "1/4-18 NPT (M)/(F)"
+            ],
+            [
+              "R35",
+              "1/2-14 NPT (M), incl. 1/4-18 NPT"
+            ]
+          ]
+        },
+        {
+          "seg": "/Options",
+          "name": "Fittings & mounting",
+          "options": [
+            [
+              "/N1,/N2",
+              "Heat exchange link"
+            ],
+            [
+              "/Z1,/Z2",
+              "Welded connector"
+            ],
+            [
+              "/B4,/B7",
+              "U-bracket"
+            ]
+          ]
+        },
+        {
+          "seg": "/Options",
+          "name": "Other",
+          "options": [
+            [
+              "/Q1",
+              "Validation report"
+            ],
+            [
+              "/G1",
+              "Ungrease treatment"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMPT-7000",
+      "family": "Smart Gauge/Absolute Pressure Transmitter (next-gen)",
+      "category": "smart_pressure_transmitter",
+      "blurb": "Ultra-wide 0.1-400 bar span, optional Bluetooth config, global hazardous-area and marine certification.",
+      "valMin": -1,
+      "valMax": 400,
+      "tempMax": 85,
+      "accuracy": "GP \u00b10.075% to \u00b10.1% URL; AP \u00b10.1% to \u00b10.2% URL",
+      "output": "hart",
+      "hazardous": "both",
+      "connection": "M20x1.5, G1/2, 1/2/1/4 NPT, flanged options",
+      "industries": [
+        "Oil & gas (wellhead/pipeline/refinery)",
+        "Power generation (boiler drum, feedwater)",
+        "Chemical & petrochemical (reactor/vessel)",
+        "Water & wastewater",
+        "Marine & offshore (DNV/LR/ABS/BV/KR/ClassNK/RS certified)"
+      ],
+      "keywords": [
+        "Bluetooth",
+        "ATEX",
+        "IECEx",
+        "hazardous area",
+        "marine certified"
+      ],
+      "extraSpec": {
+        "Wetted parts": "316L / HC-276 (Hastelloy) / Tantalum / Ceramic (for AP 0.1-0.2 bar)"
+      },
+      "orderCode": {
+        "skeleton": "FMPT-7000\u2013GP/AP\u2013[HazArea+Output+Case+Connector+Display]\u2013[Range+Sensor+Wetted+Fill+Bolting+Mount+Conn] / Options",
+        "example": "FMPT-7000-GP-0HS1L-4TAMS/G7/Y3 = 0-10 bar gauge, non-hazardous, HART + LCD, 3-year warranty"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Hazardous area",
+          "options": [
+            [
+              "0",
+              "Non-hazardous"
+            ],
+            [
+              "1-5",
+              "China (PCEC/NEPSI)"
+            ],
+            [
+              "A/B/C",
+              "CSA"
+            ],
+            [
+              "E/F/G",
+              "ATEX"
+            ],
+            [
+              "J/K/L",
+              "IECEx"
+            ],
+            [
+              "M",
+              "EAC (Russia/CIS)"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Output signal",
+          "options": [
+            [
+              "H",
+              "4-20mA + HART"
+            ],
+            [
+              "B",
+              "4-20mA + HART + Bluetooth"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Case",
+          "options": [
+            [
+              "S",
+              "316L SS, M20"
+            ],
+            [
+              "U",
+              "316L SS, NPT"
+            ],
+            [
+              "P",
+              "Aluminium, M20"
+            ],
+            [
+              "N",
+              "Aluminium, NPT"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Waterproof/explosion-proof connector",
+          "options": [
+            [
+              "0",
+              "None"
+            ],
+            [
+              "A",
+              "Flameproof plug"
+            ],
+            [
+              "1",
+              "Waterproof"
+            ],
+            [
+              "2-5",
+              "Non-FP/FP adapters"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Display",
+          "options": [
+            [
+              "N",
+              "Without LCD"
+            ],
+            [
+              "L",
+              "With LCD"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Range (GP or AP)",
+          "options": [
+            [
+              "GP: 2-7",
+              "0.4/2.5/10/30/100/400 bar"
+            ],
+            [
+              "AP: C/D/2/3-6",
+              "0.1/0.2/0.4/2.5-100 bar"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Sensor structure",
+          "options": [
+            [
+              "T",
+              "Single flange diaphragm seal"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Wetted parts",
+          "options": [
+            [
+              "A",
+              "316L"
+            ],
+            [
+              "B",
+              "HC-276"
+            ],
+            [
+              "C",
+              "Tantalum"
+            ],
+            [
+              "E",
+              "Ceramic"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Process connection",
+          "options": [
+            [
+              "M",
+              "M20x1.5"
+            ],
+            [
+              "G",
+              "G1/2"
+            ],
+            [
+              "A",
+              "1/2-14 NPT (M)"
+            ],
+            [
+              "N",
+              "1/2-14 NPT (F)"
+            ],
+            [
+              "H",
+              "Flange"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Oil filling",
+          "options": [
+            [
+              "N",
+              "No fill (ceramic only)"
+            ],
+            [
+              "S",
+              "Silicone"
+            ],
+            [
+              "L",
+              "Low-temp silicone"
+            ],
+            [
+              "D/E",
+              "Fluorocarbon 1/2"
+            ]
+          ]
+        },
+        {
+          "seg": "/Options",
+          "name": "Certificates",
+          "options": [
+            [
+              "/CS1-/CS8",
+              "CCS/DNV/BV/ABS/LR/KR/NK/RS marine"
+            ]
+          ]
+        },
+        {
+          "seg": "/Options",
+          "name": "Special features",
+          "options": [
+            [
+              "/H7",
+              "HART7"
+            ],
+            [
+              "/ST",
+              "Damping"
+            ],
+            [
+              "/J1",
+              "Gold diaphragm"
+            ],
+            [
+              "/CL1",
+              "Oil-free"
+            ],
+            [
+              "/G7,/G8",
+              "Mounting bracket"
+            ],
+            [
+              "/WH,/WL",
+              "Fault alarm level"
+            ]
+          ]
+        },
+        {
+          "seg": "/Options",
+          "name": "Warranty",
+          "options": [
+            [
+              "/Y2,/Y3,/Y5",
+              "2/3/5-year warranty"
+            ]
+          ]
+        }
+      ],
+      "deviations": [
+        "Datasheet notes \"some certifications are in process\" \u2014 confirm current certificate status/copies with Forbes Marshall before quoting a hazardous-area or marine job."
+      ]
+    },
+    {
+      "model": "FMDPT-6000",
+      "family": "Smart Differential Pressure Transmitter",
+      "category": "smart_dp_transmitter",
+      "blurb": "HART/Modbus DP transmitter for level, density, flow and pressure; 100:1 turn-down.",
+      "valMin": 0.06,
+      "valMax": 100,
+      "tempMax": 85,
+      "accuracy": "\u00b10.075% to \u00b10.2% URL (TD dependent)",
+      "output": "hart",
+      "hazardous": "safe",
+      "connection": "1/4-18 NPT(F), drain/vent options",
+      "industries": [
+        "Oil & gas industry",
+        "Food processing",
+        "Pulp & paper",
+        "Power & energy",
+        "Chemical industry",
+        "Marine equipment"
+      ],
+      "keywords": [
+        "flow",
+        "level",
+        "density",
+        "DP flow"
+      ],
+      "extraSpec": {
+        "Diaphragm options": "SS316L / Hastelloy C",
+        "Fill options": "Silicone oil / inert filler"
+      },
+      "orderCode": {
+        "skeleton": "FMDPT-6000\u2013DP\u2013[Range+Diaphragm+Fill+Seal]\u2013CableOutlet\u2013[Signal+Display]\u2013ProcessConn / Options",
+        "example": "FMDPT-6000-DP-S105DSSN-R2-HC-H1/B6 = 0-10 bar DP, SS316L, HART + LCD"
+      },
+      "codeTable": [
+        {
+          "seg": "Sensor",
+          "name": "Range",
+          "options": [
+            [
+              "S202D",
+              "20 mbar"
+            ],
+            [
+              "S602D",
+              "60 mbar"
+            ],
+            [
+              "S403D",
+              "0.4 bar"
+            ],
+            [
+              "S254D",
+              "2.5 bar"
+            ],
+            [
+              "S105D",
+              "10 bar"
+            ],
+            [
+              "S305D",
+              "30 bar"
+            ],
+            [
+              "S106D",
+              "100 bar"
+            ]
+          ]
+        },
+        {
+          "seg": "Sensor",
+          "name": "Diaphragm / fill oil / seal",
+          "options": [
+            [
+              "S/H",
+              "SS316L / Hastelloy C"
+            ],
+            [
+              "S/D",
+              "Silicone oil / inert filler"
+            ],
+            [
+              "N/P",
+              "Low-temp fluorosilicone rubber / PTFE square washer"
+            ]
+          ]
+        },
+        {
+          "seg": "Electrical",
+          "name": "Cable outlet",
+          "options": [
+            [
+              "R1",
+              "Waterproof M20"
+            ],
+            [
+              "R2",
+              "Flameproof 1/2 NPT"
+            ],
+            [
+              "R3",
+              "Flameproof M20"
+            ],
+            [
+              "R7",
+              "Flameproof G1/2"
+            ]
+          ]
+        },
+        {
+          "seg": "Output",
+          "name": "Signal / display",
+          "options": [
+            [
+              "H",
+              "HART"
+            ],
+            [
+              "B",
+              "IS HART"
+            ],
+            [
+              "R",
+              "Modbus-RTU"
+            ],
+            [
+              "A/C",
+              "No LCD / LCD"
+            ]
+          ]
+        },
+        {
+          "seg": "Process",
+          "name": "Connection",
+          "options": [
+            [
+              "H1-H4",
+              "1/4-18 NPT(F), drain at rear/upper/lower flange or SS304"
+            ],
+            [
+              "H7",
+              "1/4-18 NPT(F), 7/16-20 UNF mounting thread"
+            ]
+          ]
+        },
+        {
+          "seg": "/Options",
+          "name": "Fittings & mounting",
+          "options": [
+            [
+              "/A1,/A2,/A6,/A7",
+              "Process connection adapters"
+            ],
+            [
+              "/B1-/B13",
+              "Bracket options (pipe/plate/tube, CS or SS304)"
+            ]
+          ]
+        },
+        {
+          "seg": "/Options",
+          "name": "Other",
+          "options": [
+            [
+              "/Q1",
+              "Calibration report"
+            ],
+            [
+              "/G1",
+              "Ungrease treatment"
+            ]
+          ]
+        }
+      ],
+      "deviations": []
+    },
+    {
+      "model": "FMDPT-7000",
+      "family": "Smart Differential Pressure Transmitter (next-gen)",
+      "category": "smart_dp_transmitter",
+      "blurb": "20 mbar-100 bar DP with optional Bluetooth, hazardous-area and marine certification, 3/5-valve manifold option.",
+      "valMin": 0.02,
+      "valMax": 100,
+      "tempMax": 85,
+      "accuracy": "\u00b10.05% (opt.) to \u00b10.075% URL at TD\u22645",
+      "output": "hart",
+      "hazardous": "both",
+      "connection": "1/4-18 NPT(F), integrated valve manifold option",
+      "industries": [
+        "Oil & gas (wellhead/midstream/refinery)",
+        "Power generation (boiler feedwater, steam drum)",
+        "Chemical & petrochemical (corrosive fluid, Hastelloy/Tantalum)",
+        "Water & wastewater",
+        "Marine & offshore"
+      ],
+      "keywords": [
+        "Bluetooth",
+        "manifold",
+        "flow",
+        "level",
+        "hazardous area"
+      ],
+      "extraSpec": {
+        "Diaphragm options": "316L / HC-276 (Hastelloy) / Tantalum (all extended lead time except 316L)"
+      },
+      "orderCode": {
+        "skeleton": "FMDPT-7000\u2013[HazArea+Output+Case+Connector+Display+Range+Sensor+Wetted+Oil+Bolting+Mount+Conn] / Options",
+        "example": "FMDPT-7000-0HS1L-1A1S6H/G1 = 0-50 mbar, non-hazardous, HART + LCD"
+      },
+      "codeTable": [
+        {
+          "seg": 1,
+          "name": "Hazardous area",
+          "options": [
+            [
+              "0",
+              "Non-hazardous"
+            ],
+            [
+              "1-5",
+              "China"
+            ],
+            [
+              "A/B/C",
+              "CSA"
+            ],
+            [
+              "E/F/G",
+              "ATEX"
+            ],
+            [
+              "J/K/L",
+              "IECEx"
+            ],
+            [
+              "M",
+              "EAC"
+            ]
+          ]
+        },
+        {
+          "seg": 2,
+          "name": "Output signal",
+          "options": [
+            [
+              "H",
+              "HART"
+            ],
+            [
+              "B",
+              "HART + Bluetooth"
+            ]
+          ]
+        },
+        {
+          "seg": 3,
+          "name": "Case",
+          "options": [
+            [
+              "S",
+              "316L SS M20"
+            ],
+            [
+              "U",
+              "316L SS NPT"
+            ],
+            [
+              "P",
+              "Aluminium M20"
+            ],
+            [
+              "N",
+              "Aluminium NPT"
+            ]
+          ]
+        },
+        {
+          "seg": 4,
+          "name": "Connector",
+          "options": [
+            [
+              "0",
+              "None"
+            ],
+            [
+              "A",
+              "Flameproof plug"
+            ],
+            [
+              "1",
+              "Waterproof"
+            ],
+            [
+              "2-5",
+              "Adapters"
+            ]
+          ]
+        },
+        {
+          "seg": 5,
+          "name": "Display",
+          "options": [
+            [
+              "N",
+              "Without LCD"
+            ],
+            [
+              "L",
+              "With LCD"
+            ]
+          ]
+        },
+        {
+          "seg": 6,
+          "name": "Range",
+          "options": [
+            [
+              "0-6",
+              "20mbar/60mbar/0.4/2.5/10/30/100 bar"
+            ]
+          ]
+        },
+        {
+          "seg": 7,
+          "name": "Sensor structure",
+          "options": [
+            [
+              "T",
+              "Single flange diaphragm seal"
+            ]
+          ]
+        },
+        {
+          "seg": 8,
+          "name": "Wetted parts",
+          "options": [
+            [
+              "A/B/E",
+              "316L"
+            ],
+            [
+              "C/D/F",
+              "HC-276"
+            ],
+            [
+              "G/H/I",
+              "Tantalum"
+            ]
+          ]
+        },
+        {
+          "seg": 9,
+          "name": "Process connection",
+          "options": [
+            [
+              "M",
+              "M20x1.5"
+            ],
+            [
+              "G",
+              "G1/2"
+            ],
+            [
+              "A",
+              "1/2-14 NPT(M)"
+            ],
+            [
+              "N",
+              "1/2-14 NPT(F)"
+            ],
+            [
+              "H",
+              "Flange"
+            ]
+          ]
+        },
+        {
+          "seg": 10,
+          "name": "Oil filling",
+          "options": [
+            [
+              "S",
+              "Silicone"
+            ],
+            [
+              "L",
+              "Low-temp silicone"
+            ],
+            [
+              "D/E",
+              "Fluorocarbon 1/2"
+            ]
+          ]
+        },
+        {
+          "seg": 11,
+          "name": "Flange bolting",
+          "options": [
+            [
+              "1",
+              "35CrMo alloy steel"
+            ],
+            [
+              "6",
+              "316 SS (static pressure < 250 bar)"
+            ]
+          ]
+        },
+        {
+          "seg": 12,
+          "name": "Flange mounting",
+          "options": [
+            [
+              "H",
+              "Horizontal"
+            ],
+            [
+              "E",
+              "Vertical"
+            ]
+          ]
+        },
+        {
+          "seg": 13,
+          "name": "Process connection (drain)",
+          "options": [
+            [
+              "1",
+              "Back drain"
+            ],
+            [
+              "2",
+              "Upper drain"
+            ],
+            [
+              "3",
+              "Lower drain"
+            ],
+            [
+              "4",
+              "Side drain, vertical mounting"
+            ]
+          ]
+        },
+        {
+          "seg": "/Options",
+          "name": "Certificates & features",
+          "options": [
+            [
+              "/CS1-/CS8",
+              "Marine societies"
+            ],
+            [
+              "/B",
+              "Bluetooth"
+            ],
+            [
+              "/SQ",
+              "Square root"
+            ],
+            [
+              "/VT",
+              "Integrated valve manifold"
+            ],
+            [
+              "/G7,/G8",
+              "Mounting bracket"
+            ]
+          ]
+        }
+      ],
+      "deviations": [
+        "Datasheet notes \"some certifications are in process\" \u2014 confirm current certificate status with Forbes Marshall before quoting."
+      ]
+    },
+    {
+      "model": "FMTT-012",
+      "family": "Head Mount Smart Temperature Transmitter (non-isolated)",
+      "category": "temp_transmitter",
+      "blurb": "Simple 2-wire RTD/TC-to-4-20mA converter, no input/output isolation, Form-B head mount.",
+      "valMin": -200,
+      "valMax": 1800,
+      "tempMax": 80,
+      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
+      "output": "4-20mA",
+      "hazardous": "safe",
+      "connection": "Head-mount, Form-B compatible, M4x2 screws",
+      "industries": [
+        "Chemical & petrochemical plants",
+        "Pharmaceutical & biotechnology facilities",
+        "Power generation & utilities",
+        "Oil & gas",
+        "Water & wastewater treatment",
+        "Food & beverage processing",
+        "HVAC & building automation"
+      ],
+      "keywords": [
+        "RTD",
+        "thermocouple",
+        "Pt100",
+        "basic"
+      ],
+      "extraSpec": {
+        "Sensor types": "RTD Pt100; TC K/J/S/R/N",
+        "CJC range/accuracy": "\u221240 to +80\u00b0C, \u00b11\u00b0C",
+        "Sensor-break output": "21 mA"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published \u2014 order by stating sensor type, calibrated range, output and mounting directly."
+      ]
+    },
+    {
+      "model": "FMTT-612",
+      "family": "Isolated Head Mount Smart Temperature Transmitter",
+      "category": "temp_transmitter",
+      "blurb": "Same duty as FMTT-012 but with up to 1500VAC input/output isolation; configurable via PC software or Android app.",
+      "valMin": -200,
+      "valMax": 1800,
+      "tempMax": 80,
+      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
+      "output": "4-20mA",
+      "hazardous": "safe",
+      "connection": "Head-mount, Form-B compatible, M4x2 screws",
+      "industries": [
+        "Chemical & petrochemical plants",
+        "Pharmaceutical & biotechnology facilities",
+        "Power generation & utilities",
+        "Oil & gas",
+        "Water & wastewater treatment",
+        "Food & beverage processing"
+      ],
+      "keywords": [
+        "galvanic isolation",
+        "Android app",
+        "Pt100"
+      ],
+      "extraSpec": {
+        "Sensor types": "RTD Pt100/Cu50/Cu100 (Pt1000/WRe custom); TC K/J/S/R/N",
+        "CJC range/accuracy": "\u221240 to +80\u00b0C, \u00b11\u00b0C",
+        "Input-break output": "21 mA"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published."
+      ]
+    },
+    {
+      "model": "FMTT-712",
+      "family": "HART Smart Head Mount Temperature Transmitter",
+      "category": "temp_transmitter",
+      "blurb": "Universal RTD/TC/resistance/voltage input, HART 7, 1500VAC isolation \u2014 drop-in replacement for Rosemount 248.",
+      "valMin": -200,
+      "valMax": 2300,
+      "tempMax": 80,
+      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
+      "output": "hart",
+      "hazardous": "safe",
+      "connection": "DIN B / Form-B head mount, M3x2 screws",
+      "industries": [
+        "Chemical & petrochemical plants",
+        "Pharmaceutical & biotechnology facilities",
+        "Power generation & utilities",
+        "Oil & gas",
+        "Water & wastewater treatment",
+        "Food & beverage processing",
+        "Automation, PLC & DCS systems"
+      ],
+      "keywords": [
+        "HART7",
+        "universal input",
+        "Rosemount replacement"
+      ],
+      "extraSpec": {
+        "Sensor types": "RTD Pt100/Pt1000/Cu100/Cu50; TC K/E/S/B/J/T/R/N/WRe5/WRe3; resistance 0-4000\u03a9; voltage \u00b1800mV",
+        "Compatible configurators": "Rosemount 275, 375 and other mainstream field configurators",
+        "Sensor-break output": "20.8 mA"
+      },
+      "orderCode": null,
+      "codeTable": null,
+      "deviations": [
+        "No segmented order code published."
+      ]
+    }
+  ]
+}

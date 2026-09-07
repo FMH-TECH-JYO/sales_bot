@@ -1,0 +1,10 @@
+{
+  "name": "fm-platform-db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "seed.js",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pg": "^8.12.0"
+  }
+}
