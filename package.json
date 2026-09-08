@@ -12,6 +12,7 @@
     "db:seed": "node db/seed.js",
     "db:export-catalogue": "node db/exportCatalogue.js",
     "db:import-catalogue": "node db/importCatalogue.js",
+    "db:backfill-chunks": "node db/backfillDatasheetChunks.js",
     "dev:server": "npm run dev --workspace=server"
   },
   "dependencies": {

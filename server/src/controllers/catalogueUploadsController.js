@@ -13,6 +13,29 @@ const db = require('../config/db');
 const storage = require('../storage');
 const { extractText } = require('../services/pdfParser');
 const { extractProductDraft } = require('../services/extractProductDraft');
+const { chunkText } = require('../services/chunkDatasheet');
+const { runExport } = require('../../../db/exportCatalogue');
+
+/** Chunk this upload's parsed text and store it immediately — the "every
+ * upload feeds the RAG pipeline with chunking" step, done right at upload
+ * time, before the admin has even picked a category or reviewed anything.
+ * Uses the plain db (not a transaction client) since it's independent of
+ * the catalogue_uploads insert's own success — a chunking failure shouldn't
+ * fail the upload itself. */
+async function chunkAndStoreUploadText(uploadId, text) {
+  if (!text || !text.trim()) return;
+  try {
+    const chunks = chunkText(text);
+    for (let i = 0; i < chunks.length; i++) {
+      await db.query(
+        `INSERT INTO catalogue_upload_chunks (catalogue_upload_id, chunk_index, content) VALUES ($1,$2,$3)`,
+        [uploadId, i, chunks[i]]
+      );
+    }
+  } catch (err) {
+    console.error(`Chunking failed for catalogue_uploads id=${uploadId}:`, err.message);
+  }
+}
 
 // POST /catalogue-uploads  (multipart, field name "file")
 async function uploadCatalogue(req, res) {
@@ -34,6 +57,7 @@ async function uploadCatalogue(req, res) {
        VALUES ($1,$2,$3,$4,$5,'uploaded',$6) RETURNING *`,
       [req.file.originalname, url, hash, req.file.mimetype, category_id, text]
     );
+    await chunkAndStoreUploadText(inserted.rows[0].id, text); // usually near-empty for scanned PDFs, but chunk whatever came through
     return res.status(201).json({
       ...inserted.rows[0],
       warning: 'This PDF looks scanned/image-based — little or no text was extracted. OCR support isn\'t built yet; you can still fill the product form manually.',
@@ -46,6 +70,7 @@ async function uploadCatalogue(req, res) {
     [req.file.originalname, url, hash, req.file.mimetype, category_id, text]
   );
   let row = inserted.rows[0];
+  await chunkAndStoreUploadText(row.id, text);
 
   if (category_id) {
     try {
@@ -172,6 +197,34 @@ async function publishCatalogue(req, res) {
       );
     }
 
+    // RAG chunks: full replace on every (re-)publish, same pattern as
+    // extra_specs above. Prefer copying the chunks already computed at
+    // upload time (catalogue_upload_chunks) — cheap, and keeps chunk
+    // boundaries identical to what was chunked at ingest; only re-chunk
+    // from raw_text directly as a fallback for uploads from before that
+    // step existed (pre-migration data with no upload-time chunks yet).
+    await client.query(`DELETE FROM product_datasheet_chunks WHERE product_id = $1`, [p.id]);
+    const { rows: uploadChunkRows } = await client.query(
+      `SELECT chunk_index, content FROM catalogue_upload_chunks WHERE catalogue_upload_id = $1 ORDER BY chunk_index`,
+      [upload.id]
+    );
+    if (uploadChunkRows.length > 0) {
+      for (const c of uploadChunkRows) {
+        await client.query(
+          `INSERT INTO product_datasheet_chunks (product_id, chunk_index, content) VALUES ($1,$2,$3)`,
+          [p.id, c.chunk_index, c.content]
+        );
+      }
+    } else if (upload.raw_text) {
+      const chunks = chunkText(upload.raw_text);
+      for (let i = 0; i < chunks.length; i++) {
+        await client.query(
+          `INSERT INTO product_datasheet_chunks (product_id, chunk_index, content) VALUES ($1,$2,$3)`,
+          [p.id, i, chunks[i]]
+        );
+      }
+    }
+
     await client.query(`UPDATE product_catalogue_files SET is_current = FALSE WHERE product_id = $1`, [p.id]);
     const { rows: fileRows } = await client.query(
       `SELECT COALESCE(MAX(version),0)+1 AS next_version FROM product_catalogue_files WHERE product_id = $1`, [p.id]
@@ -187,6 +240,20 @@ async function publishCatalogue(req, res) {
     );
 
     await client.query('COMMIT');
+
+    // Keep db/catalogue_export.json always up to date on disk so the admin
+    // never has to remember to run `npm run db:export-catalogue` before
+    // committing/pushing — this was the #1 way "catalogue shows empty after
+    // pulling on another machine" happened: the DB export step got missed.
+    // Best-effort: a failure here doesn't undo the publish (already
+    // committed above), it just means db/catalogue_export.json is stale
+    // until the next publish or a manual `npm run db:export-catalogue`.
+    try {
+      await runExport(db, { silent: true });
+    } catch (exportErr) {
+      console.error('Auto-export of db/catalogue_export.json failed after publish (publish itself succeeded):', exportErr.message);
+    }
+
     res.json({ published: true, product_id: p.id });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -214,6 +281,12 @@ module.exports = {
 async function viewCatalogueFile(req, res) {
   const { rows } = await db.query(`SELECT stored_file_url, original_filename FROM catalogue_uploads WHERE id = $1`, [req.params.id]);
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
+  if (!storage.exists(rows[0].stored_file_url)) {
+    return res.status(404).json({
+      error: `File "${rows[0].original_filename}" is missing from this server's storage (expected key ${rows[0].stored_file_url}). ` +
+        `The upload record exists in the database, but the PDF isn't on disk — see DEPLOY.md's "moving this app to another machine" section.`,
+    });
+  }
   const buffer = storage.getBuffer(rows[0].stored_file_url);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${rows[0].original_filename}"`);

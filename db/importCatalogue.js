@@ -22,23 +22,13 @@ require('dotenv').config();
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
+// Shared with exportCatalogue.js so the two lists can never drift apart —
+// insert order matters here for the FKs (parents before children), which is
+// also why it's declared in exportCatalogue.js and re-exported, not the
+// other way around: export doesn't care about order, import does.
+const { TABLES } = require('./exportCatalogue');
 
 const IN_PATH = path.join(__dirname, 'catalogue_export.json');
-
-// Insert order matters for the FKs (parents before children).
-const TABLES = [
-  'categories',
-  'products',
-  'product_industries',
-  'product_keywords',
-  'product_extra_spec',
-  'product_deviations',
-  'product_order_codes',
-  'product_order_code_segments',
-  'product_range_tables',
-  'product_catalogue_files',
-  'catalogue_uploads',
-];
 
 async function main() {
   if (!fs.existsSync(IN_PATH)) {

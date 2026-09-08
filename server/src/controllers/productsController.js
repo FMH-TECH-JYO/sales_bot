@@ -1,28 +1,16 @@
 // server/src/controllers/productsController.js
 const db = require('../config/db');
 
-// Shared SELECT fragment: alongside the published (is_current) catalogue
-// file, also surface a catalogue upload that's been drafted/reviewed for
-// this exact product id but not published yet — so the sales engineer sees
-// "already uploaded, pending publish" instead of a flat "not yet uploaded"
-// when an admin genuinely has started the work in Catalogue Manager.
-const CATALOGUE_STATUS_FRAGMENT = `
-      EXISTS(
-        SELECT 1 FROM product_catalogue_files f
-        WHERE f.product_id = p.id AND f.is_current = TRUE
-      ) AS has_catalogue,
-      (
-        SELECT cu.id FROM catalogue_uploads cu
-        WHERE cu.extracted_json->>'id' = p.id AND cu.status NOT IN ('rejected', 'published')
-        ORDER BY cu.uploaded_at DESC LIMIT 1
-      ) AS pending_catalogue_upload_id`;
-
 // GET /products?category=pressure_switch
 async function listProducts(req, res) {
   const { category } = req.query;
   const params = [];
   let sql = `
-    SELECT p.*, c.label AS category_label,${CATALOGUE_STATUS_FRAGMENT}
+    SELECT p.*, c.label AS category_label,
+      EXISTS(
+        SELECT 1 FROM product_catalogue_files f
+        WHERE f.product_id = p.id AND f.is_current = TRUE
+      ) AS has_catalogue
     FROM products p JOIN categories c ON c.id = p.category_id`;
   if (category) {
     params.push(category);
@@ -75,6 +63,19 @@ async function downloadCatalogue(req, res) {
     [req.params.id]
   );
   if (!rows.length) return res.status(404).json({ error: 'No catalogue file on record for this product' });
+  // The DB row exists but the actual PDF bytes might not — e.g. this
+  // machine's database was restored via db:import-catalogue but
+  // server/uploads/ wasn't pulled/committed alongside it (or a file was
+  // deleted from disk directly). Give a clear, actionable error instead of
+  // a raw ENOENT/500 — this is the #1 way "download isn't working" reports
+  // happen, and the fix is always the same: see DEPLOY.md.
+  if (!storage.exists(rows[0].file_url)) {
+    return res.status(404).json({
+      error: `Datasheet PDF for "${rows[0].product_id}" is missing from this server's storage (expected key ${rows[0].file_url}). ` +
+        `The catalogue database record exists, but the actual file isn't on disk. This usually means server/uploads/ wasn't pulled ` +
+        `or committed alongside the database export on this machine — see DEPLOY.md's "moving this app to another machine" section.`,
+    });
+  }
   const buffer = storage.getBuffer(rows[0].file_url);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${rows[0].product_id}.pdf"`);

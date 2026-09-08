@@ -45,6 +45,25 @@ CREATE INDEX idx_products_datasheet_fts ON products USING GIN (to_tsvector('engl
 -- NOTE: two temp_switch entries in products_seed.json have model:'—' (no dedicated code).
 -- Assign them synthetic ids at seed time, e.g. 'TEMP-SW-WEATHERPROOF' / 'TEMP-SW-FLAMEPROOF'.
 
+-- Chunked datasheet text for the internal RAG retrieval pipeline
+-- (server/src/services/chunkDatasheet.js + internalDatasheetLookup.js).
+-- products.datasheet_text above stays as the raw, unsplit archive of what
+-- was published (kept for re-chunking / debugging); THIS table is what
+-- matchEnquiry.js actually searches — one row per chunk of that product's
+-- CURRENT published datasheet, so full-text ranking works on individual
+-- passages instead of one giant per-product blob. Fully replaced (delete +
+-- reinsert) every time a catalogue is (re-)published — see publishCatalogue()
+-- in catalogueUploadsController.js.
+CREATE TABLE product_datasheet_chunks (
+  id            SERIAL PRIMARY KEY,
+  product_id    TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  chunk_index   INTEGER NOT NULL,
+  content       TEXT NOT NULL,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_product_datasheet_chunks_product ON product_datasheet_chunks(product_id);
+CREATE INDEX idx_product_datasheet_chunks_fts ON product_datasheet_chunks USING GIN (to_tsvector('english', content));
+
 CREATE TABLE product_industries (
   product_id   TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   industry     TEXT NOT NULL,
@@ -253,6 +272,23 @@ CREATE TABLE catalogue_uploads (
 );
 
 CREATE INDEX idx_catalogue_uploads_status ON catalogue_uploads(status);
+
+-- Chunked text produced the moment a catalogue PDF is uploaded (before it's
+-- even reviewed/published) — this is the "every upload immediately feeds
+-- the RAG pipeline with chunking" step, done in uploadCatalogue() right
+-- after text extraction. On publish, these rows are copied into
+-- product_datasheet_chunks against the final product_id (see
+-- publishCatalogue()) — kept here too so the chunked text always exists
+-- for review/debugging even for uploads that never get published.
+CREATE TABLE catalogue_upload_chunks (
+  id                    SERIAL PRIMARY KEY,
+  catalogue_upload_id   INTEGER NOT NULL REFERENCES catalogue_uploads(id) ON DELETE CASCADE,
+  chunk_index           INTEGER NOT NULL,
+  content               TEXT NOT NULL,
+  created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_catalogue_upload_chunks_upload ON catalogue_upload_chunks(catalogue_upload_id);
+CREATE INDEX idx_catalogue_upload_chunks_fts ON catalogue_upload_chunks USING GIN (to_tsvector('english', content));
 
 -- ---------------------------------------------------------------------------
 -- Indexes worth adding immediately (query patterns from the dashboard)
