@@ -7,6 +7,8 @@
 // reason about accuracy, connection, media, etc. that this regex pass
 // doesn't attempt to capture.
 
+const { CATEGORY_ALIASES } = require('./categoryAliases');
+
 const HAZARD_TERMS = /\b(ATEX|Ex[\s-]?d|Ex[\s-]?ia|flameproof|flame[\s-]?proof|explosion[\s-]?proof|hazardous area|classified area|Zone\s?[0-2])\b/i;
 const SAFE_TERMS = /\b(weatherproof|weather[\s-]?proof|safe area)\b/i;
 const OUTPUT_TERMS = {
@@ -72,9 +74,13 @@ function detectCategory(text, categories) {
         .split(/[/,]/)
         .map((s) => s.trim())
         .filter((s) => s.length >= 4);
-      return { id: c.id, core, terms: [core, c.id.replace(/_/g, ' '), ...qualifier] };
+      const aliases = CATEGORY_ALIASES[c.id] || [];
+      return { id: c.id, core, terms: [core, c.id.replace(/_/g, ' '), ...qualifier, ...aliases] };
     })
-    .sort((a, b) => b.core.length - a.core.length);
+    // Longest term first, not just longest core label — an alias like
+    // "resistance temperature detector" should out-rank a shorter, more
+    // generic label elsewhere winning on core-length alone.
+    .sort((a, b) => Math.max(...b.terms.map((t) => t.length)) - Math.max(...a.terms.map((t) => t.length)));
   for (const c of candidates) {
     if (c.terms.some((t) => t && lower.includes(t))) return c.id;
   }

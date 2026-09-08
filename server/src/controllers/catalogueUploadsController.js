@@ -18,7 +18,7 @@ const { extractProductDraft } = require('../services/extractProductDraft');
 async function uploadCatalogue(req, res) {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded (expected multipart field "file")' });
 
-  const { url, hash } = await storage.save(req.file.buffer, req.file.originalname, req.file.mimetype);
+  const { url, hash } = storage.save(req.file.buffer, req.file.originalname);
 
   const existing = await db.query(`SELECT * FROM catalogue_uploads WHERE file_hash = $1`, [hash]);
   if (existing.rows.length > 0) {
@@ -142,18 +142,34 @@ async function publishCatalogue(req, res) {
     await client.query('BEGIN');
 
     await client.query(
-      `INSERT INTO products (id, model, family, category_id, blurb, val_min, val_max, temp_max, accuracy, output_type, hazardous, connection, no_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      `INSERT INTO products (id, model, family, category_id, blurb, val_min, val_max, temp_max, accuracy, output_type, hazardous, connection, no_code, datasheet_text)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (id) DO UPDATE SET
          model=EXCLUDED.model, family=EXCLUDED.family, category_id=EXCLUDED.category_id, blurb=EXCLUDED.blurb,
          val_min=EXCLUDED.val_min, val_max=EXCLUDED.val_max, temp_max=EXCLUDED.temp_max, accuracy=EXCLUDED.accuracy,
-         output_type=EXCLUDED.output_type, hazardous=EXCLUDED.hazardous, connection=EXCLUDED.connection, updated_at=CURRENT_TIMESTAMP`,
+         output_type=EXCLUDED.output_type, hazardous=EXCLUDED.hazardous, connection=EXCLUDED.connection,
+         datasheet_text=EXCLUDED.datasheet_text, updated_at=CURRENT_TIMESTAMP`,
       [p.id, p.model || p.id, p.family, upload.category_id, p.blurb || '', p.val_min ?? null, p.val_max ?? null,
-       p.temp_max ?? null, p.accuracy || null, p.output_type || 'visual', p.hazardous || 'safe', p.connection || null, false]
+       p.temp_max ?? null, p.accuracy || null, p.output_type || 'visual', p.hazardous || 'safe', p.connection || null, false,
+       upload.raw_text || null]
     );
 
     for (const industry of p.industries || []) {
       await client.query(`INSERT INTO product_industries (product_id, industry) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [p.id, industry]);
+    }
+
+    // Family-specific attributes (RTD wiring, switch differential, level
+    // measurement principle, indicator power type, etc.) that don't have a
+    // fixed products column — full replace on each (re-)publish so editing
+    // one in the review screen doesn't leave a stale duplicate behind.
+    await client.query(`DELETE FROM product_extra_spec WHERE product_id = $1`, [p.id]);
+    for (const spec of p.extra_specs || []) {
+      if (!spec?.label || !spec?.value) continue;
+      await client.query(
+        `INSERT INTO product_extra_spec (product_id, label, value) VALUES ($1,$2,$3)
+         ON CONFLICT (product_id, label) DO UPDATE SET value = EXCLUDED.value`,
+        [p.id, spec.label, spec.value]
+      );
     }
 
     await client.query(`UPDATE product_catalogue_files SET is_current = FALSE WHERE product_id = $1`, [p.id]);
@@ -198,7 +214,7 @@ module.exports = {
 async function viewCatalogueFile(req, res) {
   const { rows } = await db.query(`SELECT stored_file_url, original_filename FROM catalogue_uploads WHERE id = $1`, [req.params.id]);
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
-  const buffer = await storage.getBuffer(rows[0].stored_file_url);
+  const buffer = storage.getBuffer(rows[0].stored_file_url);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${rows[0].original_filename}"`);
   res.send(buffer);

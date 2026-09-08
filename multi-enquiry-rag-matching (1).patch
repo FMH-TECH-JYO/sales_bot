@@ -1,0 +1,3482 @@
+diff --git a/.gitignore b/.gitignore
+index fc8a05a..df2c74c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,6 +1,12 @@
+ node_modules/
+ .env
+-server/uploads/*
+-!server/uploads/.gitkeep
+ *.log
+-.DS_Store
+\ No newline at end of file
++.DS_Store
++
++# server/uploads/ (admin-uploaded catalogue PDFs) is INTENTIONALLY committed,
++# not ignored — see db/exportCatalogue.js / db/importCatalogue.js. This is a
++# single-server internal tool without shared/cloud storage, so the actual
++# catalogue files travel with the repo the same way the catalogue DATABASE
++# rows do (via the export/import scripts) — otherwise a `git pull` on
++# another machine has product records with no matching datasheet file, or a
++# fresh Postgres with no catalogue at all. See DEPLOY.md.
+\ No newline at end of file
+diff --git a/DEPLOY.md b/DEPLOY.md
+new file mode 100644
+index 0000000..5db102a
+--- /dev/null
++++ b/DEPLOY.md
+@@ -0,0 +1,56 @@
++# Moving this app to another machine
++
++`git push` / `git pull` only ever moves **code**. Two things this app needs
++to actually work are NOT code, so they don't travel with git automatically
++unless you do the extra step below:
++
++1. **Your catalogue database rows** (products, categories, extra specs,
++   admin upload/review history) — these live in Postgres, and git has no
++   idea Postgres exists.
++2. **The actual datasheet PDF files** admins have uploaded — these live on
++   disk under `server/uploads/`, and (unlike most projects) this repo
++   commits them directly to git rather than ignoring them, since there's
++   no shared/cloud file storage configured. Keep them checked in.
++
++If you skip step 1 below, the app runs but shows **no catalogue products**
++(a fresh database only has whatever `npm run db:seed` puts there — the
++baseline 29-product demo seed, not your real published catalogue). If you
++skip committing `server/uploads/`, products will exist in the database but
++**"View Catalogue" / datasheet download will fail** with a file-not-found
++error, because the database row points at a PDF that isn't there.
++
++## On the machine you publish catalogue changes from
++
++After uploading/publishing new catalogue entries in the admin console:
++
++```bash
++npm run db:export-catalogue        # writes db/catalogue_export.json
++git add db/catalogue_export.json server/uploads/
++git commit -m "Update catalogue: <what changed>"
++git push
++```
++
++## On the machine you're deploying/running the app on
++
++```bash
++git pull
++npm install
++npm run db:migrate                 # only needed once, or after a schema change
++npm run db:import-catalogue        # replaces this DB's catalogue tables with the export
++```
++
++`db:import-catalogue` is a full **replace**, not a merge — it's meant for
++"make this machine match the one I publish from," not for combining
++catalogues edited independently on two machines. If two people are
++publishing catalogue changes on different machines, only one of you should
++run `db:export-catalogue` before each push, or you'll overwrite each
++other's work on import.
++
++## Longer-term
++
++The actual fix for a real production deployment is to stop duplicating
++data across machines at all: one Postgres instance and one uploads folder
++that every environment reads from (a real DB host + object storage like
++S3, swapped in via `STORAGE_DRIVER` in `server/src/storage/`). The
++export/import scripts here are a stand-in for that until this app has a
++real server to live on.
+diff --git a/db/exportCatalogue.js b/db/exportCatalogue.js
+new file mode 100644
+index 0000000..6b35aaa
+--- /dev/null
++++ b/db/exportCatalogue.js
+@@ -0,0 +1,58 @@
++// db/exportCatalogue.js
++// Run with: node db/exportCatalogue.js   (or: npm run db:export-catalogue)
++//
++// git never carries your Postgres data — pushing code and pulling it on
++// another machine gets you the SCHEMA (via schema.sql) but an empty
++// database. This dumps everything that makes up your actual catalogue
++// (categories, published products and every child table, plus the admin
++// upload/review history) to db/catalogue_export.json, a plain JSON file
++// meant to be committed to git alongside the real datasheet PDFs in
++// server/uploads/ (see .gitignore's note on that). Run this after
++// publishing/updating catalogue entries and before you `git push`; run
++// importCatalogue.js after `git pull` on the other machine. See DEPLOY.md.
++//
++// Deliberately excludes enquiries/matches/offers/users/customers — those
++// are transactional, per-deployment data, not catalogue master data, and
++// exporting them would silently overwrite whatever's happening on the
++// target machine.
++
++require('dotenv').config();
++const { Client } = require('pg');
++const fs = require('fs');
++const path = require('path');
++
++const OUT_PATH = path.join(__dirname, 'catalogue_export.json');
++
++async function main() {
++  const client = new Client({ connectionString: process.env.DATABASE_URL });
++  await client.connect();
++
++  const tables = [
++    'categories',
++    'products',
++    'product_industries',
++    'product_keywords',
++    'product_extra_spec',
++    'product_deviations',
++    'product_order_codes',
++    'product_order_code_segments',
++    'product_range_tables',
++    'product_catalogue_files',
++    'catalogue_uploads',
++  ];
++
++  const dump = {};
++  for (const table of tables) {
++    const { rows } = await client.query(`SELECT * FROM ${table}`);
++    dump[table] = rows;
++    console.log(`  ${table}: ${rows.length} rows`);
++  }
++
++  fs.writeFileSync(OUT_PATH, JSON.stringify(dump, null, 2));
++  console.log(`\nWrote ${OUT_PATH}`);
++  console.log('Commit this file AND any new files under server/uploads/, then push.');
++
++  await client.end();
++}
++
++main().catch((err) => { console.error(err); process.exit(1); });
+diff --git a/db/importCatalogue.js b/db/importCatalogue.js
+new file mode 100644
+index 0000000..5681217
+--- /dev/null
++++ b/db/importCatalogue.js
+@@ -0,0 +1,97 @@
++// db/importCatalogue.js
++// Run with: node db/importCatalogue.js   (or: npm run db:import-catalogue)
++//
++// Loads db/catalogue_export.json (produced by exportCatalogue.js on the
++// source machine, committed to git, pulled here) and REPLACES the current
++// database's catalogue tables with it — categories, products and every
++// child table, plus the admin upload/review history. Run this after
++// `git pull` brings in a new catalogue_export.json, and after making sure
++// `npm run db:migrate` has been run at least once so the schema exists.
++//
++// This is a full REPLACE, not a merge: it truncates the catalogue tables
++// first so the result exactly matches the export (catalogue data should
++// have one source of truth — the machine you actually publish from —
++// not be hand-merged across machines). Because Postgres foreign keys
++// cascade on TRUNCATE, this also empties `matches` and `offer_line_items`
++// (both reference products) if you've since started using those tables —
++// they aren't part of the catalogue export and currently aren't written
++// to anywhere in the app, but that's the actual blast radius, so don't run
++// this against a database you're relying on for enquiry-tracking history.
++
++require('dotenv').config();
++const { Client } = require('pg');
++const fs = require('fs');
++const path = require('path');
++
++const IN_PATH = path.join(__dirname, 'catalogue_export.json');
++
++// Insert order matters for the FKs (parents before children).
++const TABLES = [
++  'categories',
++  'products',
++  'product_industries',
++  'product_keywords',
++  'product_extra_spec',
++  'product_deviations',
++  'product_order_codes',
++  'product_order_code_segments',
++  'product_range_tables',
++  'product_catalogue_files',
++  'catalogue_uploads',
++];
++
++async function main() {
++  if (!fs.existsSync(IN_PATH)) {
++    console.error(`No ${IN_PATH} found. Run exportCatalogue.js on the source machine, commit it, and pull it here first.`);
++    process.exit(1);
++  }
++  const dump = JSON.parse(fs.readFileSync(IN_PATH, 'utf8'));
++
++  const client = new Client({ connectionString: process.env.DATABASE_URL });
++  await client.connect();
++
++  try {
++    await client.query('BEGIN');
++
++    // Single TRUNCATE ... CASCADE covers every catalogue table (and
++    // anything else that references them) in the right order automatically
++    // — see the file-level comment for exactly what that includes.
++    await client.query(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
++
++    for (const table of TABLES) {
++      const rows = dump[table] || [];
++      if (rows.length === 0) continue;
++      const columns = Object.keys(rows[0]);
++      const colList = columns.map((c) => `"${c}"`).join(', ');
++      for (const row of rows) {
++        const values = columns.map((c) => row[c]);
++        const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
++        await client.query(`INSERT INTO ${table} (${colList}) VALUES (${placeholders})`, values);
++      }
++      // Serial PKs (product_deviations, catalogue_uploads, etc. — NOT
++      // categories/products, whose "id" is a hand-assigned TEXT code) got
++      // explicit ids from the dump; resync the sequence so the next
++      // auto-generated id doesn't collide with an imported one. Guarded on
++      // pg_get_serial_sequence actually returning something, since calling
++      // setval(NULL, ...) errors for a non-serial "id" column.
++      if (columns.includes('id')) {
++        const { rows: seqRows } = await client.query(`SELECT pg_get_serial_sequence($1, 'id') AS seq`, [table]);
++        const seqName = seqRows[0]?.seq;
++        if (seqName) {
++          await client.query(`SELECT setval($1, COALESCE((SELECT MAX(id) FROM ${table}), 1), true)`, [seqName]);
++        }
++      }
++      console.log(`  ${table}: ${rows.length} rows imported`);
++    }
++
++    await client.query('COMMIT');
++    console.log('\nCatalogue import complete.');
++  } catch (err) {
++    await client.query('ROLLBACK');
++    throw err;
++  } finally {
++    await client.end();
++  }
++}
++
++main().catch((err) => { console.error(err); process.exit(1); });
+diff --git a/db/migrations/001_add_datasheet_text.sql b/db/migrations/001_add_datasheet_text.sql
+new file mode 100644
+index 0000000..f4bb9e4
+--- /dev/null
++++ b/db/migrations/001_add_datasheet_text.sql
+@@ -0,0 +1,26 @@
++-- db/migrations/001_add_datasheet_text.sql
++--
++-- Run this against an EXISTING database that was created before this
++-- migration was added (a fresh `npm run db:migrate` from schema.sql
++-- already includes this column/index and doesn't need it).
++--
++--   psql "$DATABASE_URL" -f db/migrations/001_add_datasheet_text.sql
++--
++-- Adds products.datasheet_text (full text of the current published
++-- datasheet, used only for internal full-text lookup in matchEnquiry.js —
++-- see the column comment in schema.sql) and backfills it for any product
++-- that already has a published catalogue file, plus the search index.
++
++ALTER TABLE products ADD COLUMN IF NOT EXISTS datasheet_text TEXT;
++
++UPDATE products p
++SET datasheet_text = cu.raw_text
++FROM product_catalogue_files f
++JOIN catalogue_uploads cu ON cu.stored_file_url = f.file_url
++WHERE f.product_id = p.id
++  AND f.is_current = TRUE
++  AND p.datasheet_text IS NULL
++  AND cu.raw_text IS NOT NULL;
++
++CREATE INDEX IF NOT EXISTS idx_products_datasheet_fts
++  ON products USING GIN (to_tsvector('english', coalesce(datasheet_text, '')));
+diff --git a/db/migrations/002_drop_won_lost_tracking.sql b/db/migrations/002_drop_won_lost_tracking.sql
+new file mode 100644
+index 0000000..73f08db
+--- /dev/null
++++ b/db/migrations/002_drop_won_lost_tracking.sql
+@@ -0,0 +1,20 @@
++-- db/migrations/002_drop_won_lost_tracking.sql
++--
++-- Run against an EXISTING database created before this migration:
++--   psql "$DATABASE_URL" -f db/migrations/002_drop_won_lost_tracking.sql
++-- (A fresh `npm run db:migrate` from schema.sql already reflects this.)
++--
++-- This app doesn't track anything past an offer being generated/downloaded
++-- — no won/lost outcome. Drops the now-unused columns from `offers` (the
++-- `offers` table itself isn't currently written to by the app, so this is
++-- safe even on a live DB) and normalizes any stray 'won'/'lost' status rows
++-- back to 'generated' before dropping the columns those relied on.
++
++UPDATE offers SET status = 'generated' WHERE status IN ('won', 'lost', 'sent');
++
++ALTER TABLE offers DROP COLUMN IF EXISTS won_at;
++ALTER TABLE offers DROP COLUMN IF EXISTS lost_at;
++ALTER TABLE offers DROP COLUMN IF EXISTS lost_reason;
++
++-- Same cleanup for enquiries.stage, if any rows ever reached these values.
++UPDATE enquiries SET stage = 'offer_sent' WHERE stage IN ('won', 'lost', 'no_response');
+diff --git a/db/products_seed.json b/db/products_seed.json
+index 086ebc3..c605493 100644
+--- a/db/products_seed.json
++++ b/db/products_seed.json
+@@ -39,19 +39,34 @@
+     {
+       "id": "pressure_gauge",
+       "label": "Pressure gauge (Bourdon, dial)"
++    },
++    {
++      "id": "temperature_gauge",
++      "label": "Temperature gauge (dial thermometer)"
++    },
++    {
++      "id": "rtd",
++      "label": "RTD temperature sensor (bare element / assembly)"
++    },
++    {
++      "id": "indicator",
++      "label": "Process indicator (loop/local powered display)"
+     }
+   ],
+   "units": {
+     "pressure_switch": "bar",
+     "dp_switch": "bar",
+-    "temp_switch": "\u00b0C",
++    "temp_switch": "°C",
+     "level_switch": "mm (insertion/probe)",
+     "level_gauge": "mm (C-C distance)",
+     "pressure_transmitter": "bar",
+     "smart_pressure_transmitter": "bar",
+     "smart_dp_transmitter": "bar",
+-    "temp_transmitter": "\u00b0C",
+-    "pressure_gauge": "bar"
++    "temp_transmitter": "°C",
++    "pressure_gauge": "bar",
++    "temperature_gauge": "°C",
++    "rtd": "°C",
++    "indicator": "mA / display units"
+   },
+   "microswitch_table": [
+     [
+@@ -106,7 +121,7 @@
+       "valMin": -0.2,
+       "valMax": 250,
+       "tempMax": 130,
+-      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S. (\u00b13% F.S. typical above 40 bar, piston)",
++      "accuracy": "Scale ±1% F.S.; repeatability ±0.5% F.S. (±3% F.S. typical above 40 bar, piston)",
+       "output": "switch",
+       "hazardous": "safe",
+       "connection": "1/4\" NPT(F) standard; 3/8\"/1/2\" NPT or BSP, size/type selectable",
+@@ -136,8 +151,8 @@
+         "Optional extras": "Calibration test certificate; material test certificate; SS304 tag plate; wall-mounting plate; 2\" pipe U-clamp mounting"
+       },
+       "orderCode": {
+-        "skeleton": "WP\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
+-        "example": "WP1AAF1AA11-0000 = direct bottom mount, 1/4\" NPT(M), 0.1\u20131 kg/cm\u00b2 dual scale w/ bar, 1 SPDT general purpose 5-15A/250VAC, 3/4\" ET single comp. gland, SS316 sensor, SS316 wetted parts"
++        "skeleton": "WP–Mounting–ConnSize–ConnType–Range–Units–Microswitch–CableEntry–SensorMOC–WettedMOC–Optionals",
++        "example": "WP1AAF1AA11-0000 = direct bottom mount, 1/4\" NPT(M), 0.1–1 kg/cm² dual scale w/ bar, 1 SPDT general purpose 5-15A/250VAC, 3/4\" ET single comp. gland, SS316 sensor, SS316 wetted parts"
+       },
+       "codeTable": [
+         {
+@@ -217,7 +232,7 @@
+           "name": "Range",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "See range table below"
+             ]
+           ]
+@@ -241,7 +256,7 @@
+           "name": "Microswitch",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "See microswitch table below"
+             ]
+           ]
+@@ -321,8 +336,8 @@
+           "name": "Optional features",
+           "options": [
+             [
+-              "\u2014",
+-              "Calibration cert. / material cert. / SS304 tag plate / wall-mount plate / 2\" pipe U-clamp \u2014 state which, else 0000"
++              "—",
++              "Calibration cert. / material cert. / SS304 tag plate / wall-mount plate / 2\" pipe U-clamp — state which, else 0000"
+             ]
+           ]
+         }
+@@ -357,89 +372,89 @@
+           ],
+           [
+             "F",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.1 to 1"
+           ],
+           [
+             "G",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.2 to 2"
+           ],
+           [
+             "H",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.3 to 3"
+           ],
+           [
+             "I",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.4 to 4"
+           ],
+           [
+             "J",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.5 to 5"
+           ],
+           [
+             "K",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.6 to 6"
+           ],
+           [
+             "L",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.7 to 7"
+           ],
+           [
+             "M",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "1 to 10"
+           ],
+           [
+             "N",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "1.6 to 16"
+           ],
+           [
+             "O",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "2.5 to 25"
+           ],
+           [
+             "P",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "4 to 40"
+           ],
+           [
+             "Q",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "6 to 60"
+           ],
+           [
+             "R",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "10 to 100"
+           ],
+           [
+             "S",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "16 to 160"
+           ],
+           [
+             "T",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "25 to 220"
+           ],
+           [
+             "U",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "50 to 300"
+           ]
+         ],
+-        "note": "Ranges above 40 bar are manufactured with a piston as sensor automatically \u2014 no separate code needed. WP does not offer the vacuum codes (V\u2013Y) that FP does."
++        "note": "Ranges above 40 bar are manufactured with a piston as sensor automatically — no separate code needed. WP does not offer the vacuum codes (V–Y) that FP does."
+       },
+       "deviations": [
+-        "The individual WP datasheet lists a single PG13.5 cable gland, 1 SPDT switch only, and ambient rating \u221210\u202660\u00b0C. The general Pressure Switch mailer describes a broader \"Weatherproof Low/High Pressure Switch\" family with 2SPDT/DPDT options, multiple cable-entry types (ET/NPT/DIN/4-pin/7-pin) and ambient rating \u221220\u202665\u00b0C. These are believed to be the same ordering-code family shown at two levels of detail, but the ambient-temperature figures do not match between the two source documents \u2014 confirm the exact ambient rating for the configuration you are quoting."
++        "The individual WP datasheet lists a single PG13.5 cable gland, 1 SPDT switch only, and ambient rating −10…60°C. The general Pressure Switch mailer describes a broader \"Weatherproof Low/High Pressure Switch\" family with 2SPDT/DPDT options, multiple cable-entry types (ET/NPT/DIN/4-pin/7-pin) and ambient rating −20…65°C. These are believed to be the same ordering-code family shown at two levels of detail, but the ambient-temperature figures do not match between the two source documents — confirm the exact ambient rating for the configuration you are quoting."
+       ]
+     },
+     {
+@@ -450,7 +465,7 @@
+       "valMin": -1,
+       "valMax": 250,
+       "tempMax": 130,
+-      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S. (\u00b13% F.S. typical above 40 bar, piston)",
++      "accuracy": "Scale ±1% F.S.; repeatability ±0.5% F.S. (±3% F.S. typical above 40 bar, piston)",
+       "output": "switch",
+       "hazardous": "flameproof",
+       "connection": "1/4\" NPT(F), double compression cable gland",
+@@ -477,8 +492,8 @@
+         "Optional extras": "Calibration/material test certificate; enclosure protection to Gr. IIA/IIB or Gr. IIC; SS304 tag plate; wall/pipe mounting"
+       },
+       "orderCode": {
+-        "skeleton": "FP\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
+-        "example": "FP1AAM1AE11-0000 = direct bottom, 1/4\" NPT(M), 1\u201310 kg/cm\u00b2 dual scale, 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor, SS316 wetted parts"
++        "skeleton": "FP–Mounting–ConnSize–ConnType–Range–Units–Microswitch–CableEntry–SensorMOC–WettedMOC–Optionals",
++        "example": "FP1AAM1AE11-0000 = direct bottom, 1/4\" NPT(M), 1–10 kg/cm² dual scale, 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor, SS316 wetted parts"
+       },
+       "codeTable": [
+         {
+@@ -558,8 +573,8 @@
+           "name": "Range",
+           "options": [
+             [
+-              "\u2014",
+-              "See range table below (includes vacuum codes V\u2013Y)"
++              "—",
++              "See range table below (includes vacuum codes V–Y)"
+             ]
+           ]
+         },
+@@ -582,7 +597,7 @@
+           "name": "Microswitch",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "See microswitch table below"
+             ]
+           ]
+@@ -650,7 +665,7 @@
+           "name": "Optional features",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Calibration/material cert. / Gr.IIA,IIB or Gr.IIC enclosure protection / SS304 tag plate / wall or pipe mounting"
+             ]
+           ]
+@@ -686,109 +701,109 @@
+           ],
+           [
+             "F",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.1 to 1"
+           ],
+           [
+             "G",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.2 to 2"
+           ],
+           [
+             "H",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.3 to 3"
+           ],
+           [
+             "I",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.4 to 4"
+           ],
+           [
+             "J",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.5 to 5"
+           ],
+           [
+             "K",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.6 to 6"
+           ],
+           [
+             "L",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.7 to 7"
+           ],
+           [
+             "M",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "1 to 10"
+           ],
+           [
+             "N",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "1.6 to 16"
+           ],
+           [
+             "O",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "2.5 to 25"
+           ],
+           [
+             "P",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "4 to 40"
+           ],
+           [
+             "Q",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "6 to 60"
+           ],
+           [
+             "R",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "10 to 100"
+           ],
+           [
+             "S",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "16 to 160"
+           ],
+           [
+             "T",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "25 to 220"
+           ],
+           [
+             "U",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "50 to 300"
+           ],
+           [
+             "V",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "-1 to +1"
+           ],
+           [
+             "W",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "-1 to +2"
+           ],
+           [
+             "X",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "-1 to +3"
+           ],
+           [
+             "Y",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "-1 to +4"
+           ]
+         ],
+-        "note": "FP additionally offers vacuum-compound ranges V\u2013Y, not available on WP. Ranges above 40 bar use a piston sensor automatically."
++        "note": "FP additionally offers vacuum-compound ranges V–Y, not available on WP. Ranges above 40 bar use a piston sensor automatically."
+       },
+       "deviations": [
+-        "Same base-datasheet-vs-mailer ambient-temperature discrepancy as WP (\u221210\u202660\u00b0C individual sheet vs \u221220\u202665\u00b0C mailer) \u2014 confirm before quoting."
++        "Same base-datasheet-vs-mailer ambient-temperature discrepancy as WP (−10…60°C individual sheet vs −20…65°C mailer) — confirm before quoting."
+       ]
+     },
+     {
+@@ -799,7 +814,7 @@
+       "valMin": 0.003,
+       "valMax": 25,
+       "tempMax": 130,
+-      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S.",
++      "accuracy": "Scale ±1% F.S.; repeatability ±0.5% F.S.",
+       "output": "switch",
+       "hazardous": "safe",
+       "connection": "1/4\" NPT(F), HP/LP bottom ports",
+@@ -823,8 +838,8 @@
+         "Sensor / wetted material options": "SS316 (standard) / Monel / Hastelloy C / Teflon backup (sensor); SS316 / Monel / Hastelloy C (wetted parts)"
+       },
+       "orderCode": {
+-        "skeleton": "WD\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
+-        "example": "WD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2\u20132 kg/cm\u00b2 dual scale w/ bar, 1 SPDT general purpose, 3/4\" ET single comp. gland, SS316 sensor/wetted parts"
++        "skeleton": "WD–Mounting–ConnSize–ConnType–Range–Units–Microswitch–CableEntry–SensorMOC–WettedMOC–Optionals",
++        "example": "WD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2–2 kg/cm² dual scale w/ bar, 1 SPDT general purpose, 3/4\" ET single comp. gland, SS316 sensor/wetted parts"
+       },
+       "codeTable": [
+         {
+@@ -904,7 +919,7 @@
+           "name": "Range",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "See range table below"
+             ]
+           ]
+@@ -928,7 +943,7 @@
+           "name": "Microswitch",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "See microswitch table below"
+             ]
+           ]
+@@ -1008,7 +1023,7 @@
+           "name": "Optional features",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Calibration/material cert. / SS304 tag plate / wall-mount plate / 2\" pipe U-clamp"
+             ]
+           ]
+@@ -1044,38 +1059,38 @@
+           ],
+           [
+             "G",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.2 to 2"
+           ],
+           [
+             "I",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.4 to 4"
+           ],
+           [
+             "K",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.6 to 6"
+           ],
+           [
+             "M",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "1 to 10"
+           ],
+           [
+             "N",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "1.6 to 16"
+           ],
+           [
+             "O",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "2.5 to 25"
+           ]
+         ]
+       },
+       "deviations": [
+-        "Individual WD datasheet: ambient \u221210\u202660\u00b0C, PG13.5 gland only. Mailer \"Weatherproof Differential Pressure Switch\": range quoted as 0.1\u201325 bar, ambient \u221220\u202665\u00b0C, wider cable-entry choice. Same discrepancy pattern as WP \u2014 confirm ambient rating for the exact configuration."
++        "Individual WD datasheet: ambient −10…60°C, PG13.5 gland only. Mailer \"Weatherproof Differential Pressure Switch\": range quoted as 0.1–25 bar, ambient −20…65°C, wider cable-entry choice. Same discrepancy pattern as WP — confirm ambient rating for the exact configuration."
+       ]
+     },
+     {
+@@ -1086,7 +1101,7 @@
+       "valMin": 0.003,
+       "valMax": 25,
+       "tempMax": 130,
+-      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S.",
++      "accuracy": "Scale ±1% F.S.; repeatability ±0.5% F.S.",
+       "output": "switch",
+       "hazardous": "flameproof",
+       "connection": "1/4\" NPT(F), double compression cable gland",
+@@ -1109,8 +1124,8 @@
+         "Sensor / wetted material options": "SS316 (standard) / Monel / Hastelloy C / Teflon backup (sensor); SS316 / Monel / Hastelloy C (wetted parts)"
+       },
+       "orderCode": {
+-        "skeleton": "FD\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
+-        "example": "FD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2\u20132 kg/cm\u00b2, 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor/wetted parts"
++        "skeleton": "FD–Mounting–ConnSize–ConnType–Range–Units–Microswitch–CableEntry–SensorMOC–WettedMOC–Optionals",
++        "example": "FD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2–2 kg/cm², 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor/wetted parts"
+       },
+       "codeTable": [
+         {
+@@ -1190,7 +1205,7 @@
+           "name": "Range",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "See range table below"
+             ]
+           ]
+@@ -1214,7 +1229,7 @@
+           "name": "Microswitch",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "See microswitch table below"
+             ]
+           ]
+@@ -1282,7 +1297,7 @@
+           "name": "Optional features",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Calibration/material cert. / Gr.IIA,IIB or Gr.IIC enclosure protection / SS304 tag plate / wall or pipe mounting"
+             ]
+           ]
+@@ -1318,32 +1333,32 @@
+           ],
+           [
+             "G",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.2 to 2"
+           ],
+           [
+             "I",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.4 to 4"
+           ],
+           [
+             "K",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "0.6 to 6"
+           ],
+           [
+             "M",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "1 to 10"
+           ],
+           [
+             "N",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "1.6 to 16"
+           ],
+           [
+             "O",
+-            "kg/cm\u00b2 & bar",
++            "kg/cm² & bar",
+             "2.5 to 25"
+           ]
+         ]
+@@ -1353,15 +1368,15 @@
+       ]
+     },
+     {
+-      "model": "\u2014",
++      "model": "—",
+       "family": "Weatherproof Temperature Switch",
+       "category": "temp_switch",
+       "noCode": true,
+-      "blurb": "Gas-filled capillary temperature switch, safe-area, adjustable set point, up to 5 m armoured capillary. Only documented in the general Pressure Switch mailer \u2014 no dedicated datasheet or model code supplied.",
++      "blurb": "Gas-filled capillary temperature switch, safe-area, adjustable set point, up to 5 m armoured capillary. Only documented in the general Pressure Switch mailer — no dedicated datasheet or model code supplied.",
+       "valMin": 10,
+       "valMax": 300,
+       "tempMax": 300,
+-      "accuracy": "\u00b13% F.S.",
++      "accuracy": "±3% F.S.",
+       "output": "switch",
+       "hazardous": "safe",
+       "connection": "Fixed/adjustable 3/8\" or 1/2\" BSP or NPT",
+@@ -1387,19 +1402,19 @@
+       "codeTable": null,
+       "rangeTable": null,
+       "deviations": [
+-        "No dedicated datasheet or segmented order code was supplied for this product \u2014 everything here is transcribed from the general Pressure Switch mailer only. Treat range/accuracy figures as indicative until confirmed by the factory."
++        "No dedicated datasheet or segmented order code was supplied for this product — everything here is transcribed from the general Pressure Switch mailer only. Treat range/accuracy figures as indicative until confirmed by the factory."
+       ]
+     },
+     {
+-      "model": "\u2014",
++      "model": "—",
+       "family": "Flame/Explosion Proof Temperature Switch",
+       "category": "temp_switch",
+       "noCode": true,
+-      "blurb": "Ex d IIA/IIB/IIC hazardous-area version of the capillary temperature switch. Only documented in the general mailer \u2014 no dedicated datasheet or model code supplied.",
++      "blurb": "Ex d IIA/IIB/IIC hazardous-area version of the capillary temperature switch. Only documented in the general mailer — no dedicated datasheet or model code supplied.",
+       "valMin": 10,
+       "valMax": 300,
+       "tempMax": 300,
+-      "accuracy": "\u00b13% F.S.",
++      "accuracy": "±3% F.S.",
+       "output": "switch",
+       "hazardous": "flameproof",
+       "connection": "Fixed/adjustable 3/8\" or 1/2\" BSP or NPT",
+@@ -1422,7 +1437,7 @@
+       "codeTable": null,
+       "rangeTable": null,
+       "deviations": [
+-        "Same caveat as the weatherproof version \u2014 mailer-only source, no dedicated datasheet or code table supplied."
++        "Same caveat as the weatherproof version — mailer-only source, no dedicated datasheet or code table supplied."
+       ]
+     },
+     {
+@@ -1433,10 +1448,10 @@
+       "valMin": 300,
+       "valMax": 3000,
+       "tempMax": 100,
+-      "accuracy": "Switching differential fixed 10\u00b15 mm",
++      "accuracy": "Switching differential fixed 10±5 mm",
+       "output": "switch",
+       "hazardous": "both",
+-      "connection": "Flanged (92 mm PCD round/square/forged, or 1\"\u20133\" RF 150#/300#) or 1\" NPT/BSP(M)",
++      "connection": "Flanged (92 mm PCD round/square/forged, or 1\"–3\" RF 150#/300#) or 1\" NPT/BSP(M)",
+       "industries": [
+         "Power plants",
+         "Chemical industries",
+@@ -1455,7 +1470,7 @@
+         "Min. specific gravity": "0.7"
+       },
+       "orderCode": {
+-        "skeleton": "LT\u2013ProcessConn\u2013ProbeLength\u2013ReedSwitch\u2013SetPoints\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
++        "skeleton": "LT–ProcessConn–ProbeLength–ReedSwitch–SetPoints–CableEntry–FloatDim–Enclosure–MOC / Optionals",
+         "example": "LTBA11E111-0000 = 92mm PCD sq. flange, 300 mm probe, 1 SPST, 1 set point, PG13.5 single gland, 28 mm float, weatherproof, SS316"
+       },
+       "codeTable": [
+@@ -1684,7 +1699,7 @@
+               "PVDF"
+             ],
+             [
+-              "\u2014",
++              "—",
+               "Optional: calibration/material test cert. 3.1, SS304 or SS316 tag plate"
+             ]
+           ]
+@@ -1697,11 +1712,11 @@
+       "model": "LS",
+       "family": "Side-Mounted Level Switch (standard)",
+       "category": "level_switch",
+-      "blurb": "Side-entry float switch for a single high/low point, up to 120\u00b0C standard duty.",
++      "blurb": "Side-entry float switch for a single high/low point, up to 120°C standard duty.",
+       "valMin": 180,
+       "valMax": 180,
+       "tempMax": 120,
+-      "accuracy": "Differential fixed 3\u201330 mm (max); adjustable 40\u2013250 mm (optional)",
++      "accuracy": "Differential fixed 3–30 mm (max); adjustable 40–250 mm (optional)",
+       "output": "switch",
+       "hazardous": "both",
+       "connection": "Flanged (92 mm PCD) or 1\" NPT/BSP(M)",
+@@ -1724,7 +1739,7 @@
+         "Min. insertion depth": "180 mm"
+       },
+       "orderCode": {
+-        "skeleton": "LS\u2013ProcessConn\u2013Microswitch\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
++        "skeleton": "LS–ProcessConn–Microswitch–CableEntry–FloatDim–Enclosure–MOC / Optionals",
+         "example": "LSB1E111-0000 = 92mm PCD sq. flange, 2 SPDT general purpose, PG13.5 single gland, 50/120 float, weatherproof LM24, SS316"
+       },
+       "codeTable": [
+@@ -1734,7 +1749,7 @@
+           "options": [
+             [
+               "LS",
+-              "Side-mounted level switch (standard, \u2264120\u00b0C)"
++              "Side-mounted level switch (standard, ≤120°C)"
+             ]
+           ]
+         },
+@@ -1873,7 +1888,7 @@
+               "PVDF"
+             ],
+             [
+-              "\u2014",
++              "—",
+               "Optional: calibration/material test cert. 3.1 (standard), SS304 or SS316 tag plate"
+             ]
+           ]
+@@ -1881,18 +1896,18 @@
+       ],
+       "rangeTable": null,
+       "deviations": [
+-        "Listed separately from the high-temperature \"LH\" variant below \u2014 do not use this entry for duty above 120\u00b0C."
++        "Listed separately from the high-temperature \"LH\" variant below — do not use this entry for duty above 120°C."
+       ]
+     },
+     {
+       "model": "LH",
+       "family": "Side-Mounted Level Switch (high-temperature)",
+       "category": "level_switch",
+-      "blurb": "Same LS body, rated for high-temperature service up to 350\u00b0C (optional max) \u2014 order code prefix LH instead of LS, same segment structure.",
++      "blurb": "Same LS body, rated for high-temperature service up to 350°C (optional max) — order code prefix LH instead of LS, same segment structure.",
+       "valMin": 180,
+       "valMax": 180,
+       "tempMax": 350,
+-      "accuracy": "Differential fixed 3\u201330 mm (max); adjustable 40\u2013250 mm (optional)",
++      "accuracy": "Differential fixed 3–30 mm (max); adjustable 40–250 mm (optional)",
+       "output": "switch",
+       "hazardous": "both",
+       "connection": "Flanged (92 mm PCD) or 1\" NPT/BSP(M)",
+@@ -1912,7 +1927,7 @@
+         "Min. insertion depth": "180 mm"
+       },
+       "orderCode": {
+-        "skeleton": "LH\u2013ProcessConn\u2013Microswitch\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
++        "skeleton": "LH–ProcessConn–Microswitch–CableEntry–FloatDim–Enclosure–MOC / Optionals",
+         "example": "Same segment pattern and codes as LS (see LS code table), with LH model prefix"
+       },
+       "codeTable": [
+@@ -1922,7 +1937,7 @@
+           "options": [
+             [
+               "LH",
+-              "Side-mounted level switch (high-temperature, to 350\u00b0C optional max)"
++              "Side-mounted level switch (high-temperature, to 350°C optional max)"
+             ]
+           ]
+         },
+@@ -1931,8 +1946,8 @@
+           "name": "Process connection",
+           "options": [
+             [
+-              "\u2014",
+-              "Same options as LS \u2014 see LS code table"
++              "—",
++              "Same options as LS — see LS code table"
+             ]
+           ]
+         },
+@@ -1941,7 +1956,7 @@
+           "name": "Microswitch",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Same options as LS"
+             ]
+           ]
+@@ -1951,7 +1966,7 @@
+           "name": "Cable entry",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Same options as LS"
+             ]
+           ]
+@@ -1961,7 +1976,7 @@
+           "name": "Float dimension",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Same options as LS"
+             ]
+           ]
+@@ -1971,7 +1986,7 @@
+           "name": "Enclosure",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Same options as LS"
+             ]
+           ]
+@@ -1981,7 +1996,7 @@
+           "name": "Float/stem/connection MOC + optionals",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Same options as LS"
+             ]
+           ]
+@@ -1989,7 +2004,7 @@
+       ],
+       "rangeTable": null,
+       "deviations": [
+-        "The 350\u00b0C figure is described in the datasheet as an \"optional max\" for the high-temperature mode \u2014 confirm the exact continuous rating required with the factory before quoting."
++        "The 350°C figure is described in the datasheet as an \"optional max\" for the high-temperature mode — confirm the exact continuous rating required with the factory before quoting."
+       ]
+     },
+     {
+@@ -2003,7 +2018,7 @@
+       "accuracy": "Visibility = C-C minus 150 mm",
+       "output": "visual",
+       "hazardous": "safe",
+-      "connection": "Flanged or screwed, up to 15 kg/cm\u00b2",
++      "connection": "Flanged or screwed, up to 15 kg/cm²",
+       "industries": [
+         "Chemical/process industry",
+         "Marine/shipping (tank gauging)",
+@@ -2021,7 +2036,7 @@
+         "Glass": "Heavy-walled borosilicate, H-19/16 Teflon packing"
+       },
+       "orderCode": {
+-        "skeleton": "FMLG-TB\u2013Mounting\u2013BodyMaterial\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013ScaleMaterial\u2013CtoC / Options",
++        "skeleton": "FMLG-TB–Mounting–BodyMaterial–ProcessConn–TopVent–BottomDrain–ScaleMaterial–CtoC / Options",
+         "example": "FMLG-TB-SD-4S-F501-V1-V2-AL-L0800 = side mount, SS304 channel, 1/2\" 150# RF flange, 800 mm C-C"
+       },
+       "codeTable": [
+@@ -2184,10 +2199,10 @@
+       "valMin": 0,
+       "valMax": 6000,
+       "tempMax": 400,
+-      "accuracy": "\u00b110 mm measuring error",
++      "accuracy": "±10 mm measuring error",
+       "output": "visual",
+       "hazardous": "safe",
+-      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm\u00b2",
++      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm²",
+       "industries": [
+         "Chemical processing (hazardous reactors)",
+         "Fertilizer (ammonia storage)",
+@@ -2204,8 +2219,8 @@
+         "Wetted parts": "AISI 316 SS or 316L SS"
+       },
+       "orderCode": {
+-        "skeleton": "FMLG-MG\u2013Mounting\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013Drain\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
+-        "example": "FMLG-MG-SD-SS-T1-P3-V4-D1-F501-L1000-AL-RW-2-2 = side mount, SS316, 0-50 kg/cm\u00b2, 1000 mm C-C, 2 Ex-proof switches"
++        "skeleton": "FMLG-MG–Mounting–WettedParts–TempRange–PressRange–Vent–Drain–ProcessConn–CtoC–Scale–FlagColour–Switches–SwitchHousing",
++        "example": "FMLG-MG-SD-SS-T1-P3-V4-D1-F501-L1000-AL-RW-2-2 = side mount, SS316, 0-50 kg/cm², 1000 mm C-C, 2 Ex-proof switches"
+       },
+       "codeTable": [
+         {
+@@ -2242,11 +2257,11 @@
+           "options": [
+             [
+               "T1",
+-              "-20 to 120\u00b0C"
++              "-20 to 120°C"
+             ],
+             [
+               "T2",
+-              "-20 to 400\u00b0C (with cooling fins)"
++              "-20 to 400°C (with cooling fins)"
+             ]
+           ]
+         },
+@@ -2256,15 +2271,15 @@
+           "options": [
+             [
+               "P1",
+-              "0-10 kg/cm\u00b2"
++              "0-10 kg/cm²"
+             ],
+             [
+               "P2",
+-              "0-25 kg/cm\u00b2"
++              "0-25 kg/cm²"
+             ],
+             [
+               "P3",
+-              "0-50 kg/cm\u00b2"
++              "0-50 kg/cm²"
+             ]
+           ]
+         },
+@@ -2419,14 +2434,14 @@
+       "model": "FMLG-BM",
+       "family": "Bi-Colour Magnetic Level Indicator",
+       "category": "level_gauge",
+-      "blurb": "Bypass gauge with bi-colour flag to distinguish liquid from vapour at a glance; up to 400\u00b0C. Indicator body is not itself Ex-certified; optional Ex-proof switch accessory available.",
++      "blurb": "Bypass gauge with bi-colour flag to distinguish liquid from vapour at a glance; up to 400°C. Indicator body is not itself Ex-certified; optional Ex-proof switch accessory available.",
+       "valMin": 0,
+       "valMax": 6000,
+       "tempMax": 400,
+-      "accuracy": "\u00b110 mm measuring error",
++      "accuracy": "±10 mm measuring error",
+       "output": "visual",
+       "hazardous": "safe",
+-      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm\u00b2",
++      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm²",
+       "industries": [
+         "Petrochemical/refining (distillation columns)",
+         "Oil & gas / LPG (pressurised storage)",
+@@ -2442,7 +2457,7 @@
+         "Wetted parts": "AISI 316 SS or 316L SS"
+       },
+       "orderCode": {
+-        "skeleton": "FMLG-BM\u2013Mounting\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013Drain\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
++        "skeleton": "FMLG-BM–Mounting–WettedParts–TempRange–PressRange–Vent–Drain–ProcessConn–CtoC–Scale–FlagColour–Switches–SwitchHousing",
+         "example": "FMLG-BM-TP-SL-T2-P2-V6-D2-F103-L2000-4S-BW-1-1 = top mount, SS316L, 2000 mm C-C"
+       },
+       "codeTable": [
+@@ -2480,11 +2495,11 @@
+           "options": [
+             [
+               "T1",
+-              "-20 to 120\u00b0C"
++              "-20 to 120°C"
+             ],
+             [
+               "T2",
+-              "-20 to 400\u00b0C"
++              "-20 to 400°C"
+             ]
+           ]
+         },
+@@ -2494,15 +2509,15 @@
+           "options": [
+             [
+               "P1",
+-              "0-10 kg/cm\u00b2"
++              "0-10 kg/cm²"
+             ],
+             [
+               "P2",
+-              "0-25 kg/cm\u00b2"
++              "0-25 kg/cm²"
+             ],
+             [
+               "P3",
+-              "0-50 kg/cm\u00b2"
++              "0-50 kg/cm²"
+             ]
+           ]
+         },
+@@ -2637,10 +2652,10 @@
+       "valMin": 0,
+       "valMax": 6000,
+       "tempMax": 400,
+-      "accuracy": "\u00b110 mm measuring error",
++      "accuracy": "±10 mm measuring error",
+       "output": "visual",
+       "hazardous": "safe",
+-      "connection": "Flanged, top mount only, up to 50 kg/cm\u00b2",
++      "connection": "Flanged, top mount only, up to 50 kg/cm²",
+       "industries": [
+         "Hazardous/chemical waste pits",
+         "Effluent/neutralisation sumps",
+@@ -2656,7 +2671,7 @@
+         "Wetted parts": "AISI 316 SS or 316L SS"
+       },
+       "orderCode": {
+-        "skeleton": "FMLG-TM\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
++        "skeleton": "FMLG-TM–WettedParts–TempRange–PressRange–Vent–ProcessConn–CtoC–Scale–FlagColour–Switches–SwitchHousing",
+         "example": "FMLG-TM-SS-T1-P1-V6-F501-L1500-AL-KW-1-1 = SS316, 1500 mm C-C, top mount only"
+       },
+       "codeTable": [
+@@ -2680,11 +2695,11 @@
+           "options": [
+             [
+               "T1",
+-              "-20 to 120\u00b0C"
++              "-20 to 120°C"
+             ],
+             [
+               "T2",
+-              "-20 to 400\u00b0C"
++              "-20 to 400°C"
+             ]
+           ]
+         },
+@@ -2694,15 +2709,15 @@
+           "options": [
+             [
+               "P1",
+-              "0-10 kg/cm\u00b2"
++              "0-10 kg/cm²"
+             ],
+             [
+               "P2",
+-              "0-25 kg/cm\u00b2"
++              "0-25 kg/cm²"
+             ],
+             [
+               "P3",
+-              "0-50 kg/cm\u00b2"
++              "0-50 kg/cm²"
+             ]
+           ]
+         },
+@@ -2823,10 +2838,10 @@
+       "valMin": 0,
+       "valMax": 6000,
+       "tempMax": 300,
+-      "accuracy": "\u00b12 mm",
++      "accuracy": "±2 mm",
+       "output": "visual",
+       "hazardous": "both",
+-      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm\u00b2 classes",
++      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm² classes",
+       "industries": [
+         "Power generation (steam boiler drums)",
+         "Petrochemical (water/hydrocarbon reactors)",
+@@ -2843,7 +2858,7 @@
+         "Body material options": "CS / ASTM A-105 / SS304 / SS316 / PP (CS reinforced)"
+       },
+       "orderCode": {
+-        "skeleton": "FMLG-RF\u2013BodyMaterial\u2013TubeGuard\u2013Gasket\u2013ValveBonnet\u2013ConnOrientation\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013Scale\u2013CtoC / Options",
++        "skeleton": "FMLG-RF–BodyMaterial–TubeGuard–Gasket–ValveBonnet–ConnOrientation–ProcessConn–TopVent–BottomDrain–Scale–CtoC / Options",
+         "example": "FMLG-RF-T-T-G5-B3-OR-F501-PN1-PN1-AL-L0800-BV = SS316, bolted bonnet, 800 mm C-C"
+       },
+       "codeTable": [
+@@ -2915,15 +2930,15 @@
+           "options": [
+             [
+               "B1",
+-              "Screwed bonnet, max 85 kg/cm\u00b2"
++              "Screwed bonnet, max 85 kg/cm²"
+             ],
+             [
+               "B2",
+-              "Union bonnet, max 165 kg/cm\u00b2"
++              "Union bonnet, max 165 kg/cm²"
+             ],
+             [
+               "B3",
+-              "Bolted bonnet, max 210 kg/cm\u00b2"
++              "Bolted bonnet, max 210 kg/cm²"
+             ]
+           ]
+         },
+@@ -3002,7 +3017,7 @@
+           "name": "Bottom side drain",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Same options as top vent"
+             ]
+           ]
+@@ -3052,10 +3067,10 @@
+       "valMin": 0,
+       "valMax": 6000,
+       "tempMax": 300,
+-      "accuracy": "\u00b12 mm",
++      "accuracy": "±2 mm",
+       "output": "visual",
+       "hazardous": "both",
+-      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm\u00b2 classes",
++      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm² classes",
+       "industries": [
+         "Chemical processing (interface tracking)",
+         "Fertilizer/agrochemical (colour-change batching)",
+@@ -3068,10 +3083,10 @@
+         "dirty liquid"
+       ],
+       "extraSpec": {
+-        "Sight glass options": "Borosilicate (max 20kg/cm\u00b2, 120\u00b0C) / Ilmadur / Klinger"
++        "Sight glass options": "Borosilicate (max 20kg/cm², 120°C) / Ilmadur / Klinger"
+       },
+       "orderCode": {
+-        "skeleton": "FMLG-TP\u2013BodyMaterial\u2013CoverMaterial\u2013SightGlass\u2013Gasket\u2013ValveBonnet\u2013ConnOrientation\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013Scale\u2013CtoC / Options",
++        "skeleton": "FMLG-TP–BodyMaterial–CoverMaterial–SightGlass–Gasket–ValveBonnet–ConnOrientation–ProcessConn–TopVent–BottomDrain–Scale–CtoC / Options",
+         "example": "FMLG-TP-6T-6T-BO-PT-B3-OR-F501-PN1-PN1-AL-L0800-IW = SS316, borosilicate glass, illuminated"
+       },
+       "codeTable": [
+@@ -3117,7 +3132,7 @@
+           "options": [
+             [
+               "BO",
+-              "Borosilicate (max 20 kg/cm\u00b2, 120\u00b0C)"
++              "Borosilicate (max 20 kg/cm², 120°C)"
+             ],
+             [
+               "IL",
+@@ -3153,15 +3168,15 @@
+           "options": [
+             [
+               "B1",
+-              "Screwed, max 85 kg/cm\u00b2"
++              "Screwed, max 85 kg/cm²"
+             ],
+             [
+               "B2",
+-              "Union, max 165 kg/cm\u00b2"
++              "Union, max 165 kg/cm²"
+             ],
+             [
+               "B3",
+-              "Bolted, max 210 kg/cm\u00b2"
++              "Bolted, max 210 kg/cm²"
+             ]
+           ]
+         },
+@@ -3232,7 +3247,7 @@
+           "name": "Bottom side drain",
+           "options": [
+             [
+-              "\u2014",
++              "—",
+               "Same options as top vent"
+             ]
+           ]
+@@ -3294,14 +3309,14 @@
+       "model": "FMLG-WP",
+       "family": "Welded Pad Type Level Indicator",
+       "category": "level_gauge",
+-      "blurb": "Welds directly onto the vessel wall \u2014 used where piping-induced thermal error or space constraints rule out a remote gauge.",
++      "blurb": "Welds directly onto the vessel wall — used where piping-induced thermal error or space constraints rule out a remote gauge.",
+       "valMin": 0,
+       "valMax": 6000,
+       "tempMax": 240,
+       "accuracy": "Per gauge classification table (body/gasket combination)",
+       "output": "visual",
+       "hazardous": "safe",
+-      "connection": "Direct weld-on, flat or contoured; up to 40 kg/cm\u00b2 (SS)",
++      "connection": "Direct weld-on, flat or contoured; up to 40 kg/cm² (SS)",
+       "industries": [
+         "Specialty chemicals (crystallization reactors)",
+         "Chemical processing (agitated mixing vessels)",
+@@ -3314,10 +3329,10 @@
+         "no piping"
+       ],
+       "extraSpec": {
+-        "Sight glass options": "Borosilicate (max 10kg/cm\u00b2,120\u00b0C) / Ilmadur (max 20,120\u00b0C) / Klinger (max 40,240\u00b0C)"
++        "Sight glass options": "Borosilicate (max 10kg/cm²,120°C) / Ilmadur (max 20,120°C) / Klinger (max 40,240°C)"
+       },
+       "orderCode": {
+-        "skeleton": "FMLG-WP\u2013ProcessConn(Welded)\u2013BodyMaterial\u2013RetainerCap\u2013SightGlass\u2013Gasket\u2013ORing\u2013Bolts\u2013Length/Sections",
++        "skeleton": "FMLG-WP–ProcessConn(Welded)–BodyMaterial–RetainerCap–SightGlass–Gasket–ORing–Bolts–Length/Sections",
+         "example": "FMLG-WP-W-6T-6T-KL-TF-VT-SS-L1200-1 = SS316, Klinger glass, 1200 mm, single section"
+       },
+       "codeTable": [
+@@ -3365,15 +3380,15 @@
+           "options": [
+             [
+               "BO",
+-              "Borosilicate, max 10kg/cm\u00b2, 120\u00b0C"
++              "Borosilicate, max 10kg/cm², 120°C"
+             ],
+             [
+               "IL",
+-              "Ilmadur, max 20kg/cm\u00b2, 120\u00b0C"
++              "Ilmadur, max 20kg/cm², 120°C"
+             ],
+             [
+               "KL",
+-              "Klinger, max 40kg/cm\u00b2, 240\u00b0C"
++              "Klinger, max 40kg/cm², 240°C"
+             ]
+           ]
+         },
+@@ -3498,7 +3513,7 @@
+       "orderCode": null,
+       "codeTable": null,
+       "deviations": [
+-        "No segmented order code published \u2014 order by stating range, output signal, process connection, electrical connector and housing size directly. Datasheet cross-referenced against source reference \"PT124B/G-210\"; confirm exact connector/output combination availability with the factory."
++        "No segmented order code published — order by stating range, output signal, process connection, electrical connector and housing size directly. Datasheet cross-referenced against source reference \"PT124B/G-210\"; confirm exact connector/output combination availability with the factory."
+       ]
+     },
+     {
+@@ -3539,7 +3554,7 @@
+       "model": "FMPT-412",
+       "family": "Flush Diaphragm Pressure Transmitter",
+       "category": "pressure_transmitter",
+-      "blurb": "Flush-face diaphragm avoids port clogging \u2014 for viscous, slurry or particulate-laden media, hermetically welded wetted parts.",
++      "blurb": "Flush-face diaphragm avoids port clogging — for viscous, slurry or particulate-laden media, hermetically welded wetted parts.",
+       "valMin": 0,
+       "valMax": 700,
+       "tempMax": 85,
+@@ -3643,7 +3658,7 @@
+       "model": "FMPT-812",
+       "family": "High-Temperature Pressure Transmitter (cooling element)",
+       "category": "pressure_transmitter",
+-      "blurb": "Integrated cooling element permits medium temperatures up to 150\u00b0C at the sensor.",
++      "blurb": "Integrated cooling element permits medium temperatures up to 150°C at the sensor.",
+       "valMin": -1,
+       "valMax": 1000,
+       "tempMax": 150,
+@@ -3679,7 +3694,7 @@
+       "valMin": -1,
+       "valMax": 400,
+       "tempMax": 85,
+-      "accuracy": "GP \u00b10.075% to \u00b10.2% URL; AP \u00b10.1% to \u00b10.2% URL",
++      "accuracy": "GP ±0.075% to ±0.2% URL; AP ±0.1% to ±0.2% URL",
+       "output": "hart",
+       "hazardous": "safe",
+       "connection": "M20x1.5, G1/2, G1/4, 1/2/1/4 NPT + adapters",
+@@ -3701,7 +3716,7 @@
+         "Certification": "Contact Forbes Marshall for current hazardous-area/regulatory approval status (none listed as standard)"
+       },
+       "orderCode": {
+-        "skeleton": "FMPT-6000\u2013GP/AP\u2013[Range+Diaphragm+Fill+Seal]\u2013CableOutlet\u2013[Signal+Display]\u2013ProcessConn / Options",
++        "skeleton": "FMPT-6000–GP/AP–[Range+Diaphragm+Fill+Seal]–CableOutlet–[Signal+Display]–ProcessConn / Options",
+         "example": "FMPT-6000-GP-S105GSSF-R2-HC-M01/B7 = 0-10 bar gauge, SS316L, silicone fill, HART + LCD, M20, U-bracket"
+       },
+       "codeTable": [
+@@ -3864,7 +3879,7 @@
+       "valMin": -1,
+       "valMax": 400,
+       "tempMax": 85,
+-      "accuracy": "GP \u00b10.075% to \u00b10.1% URL; AP \u00b10.1% to \u00b10.2% URL",
++      "accuracy": "GP ±0.075% to ±0.1% URL; AP ±0.1% to ±0.2% URL",
+       "output": "hart",
+       "hazardous": "both",
+       "connection": "M20x1.5, G1/2, 1/2/1/4 NPT, flanged options",
+@@ -3886,7 +3901,7 @@
+         "Wetted parts": "316L / HC-276 (Hastelloy) / Tantalum / Ceramic (for AP 0.1-0.2 bar)"
+       },
+       "orderCode": {
+-        "skeleton": "FMPT-7000\u2013GP/AP\u2013[HazArea+Output+Case+Connector+Display]\u2013[Range+Sensor+Wetted+Fill+Bolting+Mount+Conn] / Options",
++        "skeleton": "FMPT-7000–GP/AP–[HazArea+Output+Case+Connector+Display]–[Range+Sensor+Wetted+Fill+Bolting+Mount+Conn] / Options",
+         "example": "FMPT-7000-GP-0HS1L-4TAMS/G7/Y3 = 0-10 bar gauge, non-hazardous, HART + LCD, 3-year warranty"
+       },
+       "codeTable": [
+@@ -4138,7 +4153,7 @@
+         }
+       ],
+       "deviations": [
+-        "Datasheet notes \"some certifications are in process\" \u2014 confirm current certificate status/copies with Forbes Marshall before quoting a hazardous-area or marine job."
++        "Datasheet notes \"some certifications are in process\" — confirm current certificate status/copies with Forbes Marshall before quoting a hazardous-area or marine job."
+       ]
+     },
+     {
+@@ -4149,7 +4164,7 @@
+       "valMin": 0.06,
+       "valMax": 100,
+       "tempMax": 85,
+-      "accuracy": "\u00b10.075% to \u00b10.2% URL (TD dependent)",
++      "accuracy": "±0.075% to ±0.2% URL (TD dependent)",
+       "output": "hart",
+       "hazardous": "safe",
+       "connection": "1/4-18 NPT(F), drain/vent options",
+@@ -4172,7 +4187,7 @@
+         "Fill options": "Silicone oil / inert filler"
+       },
+       "orderCode": {
+-        "skeleton": "FMDPT-6000\u2013DP\u2013[Range+Diaphragm+Fill+Seal]\u2013CableOutlet\u2013[Signal+Display]\u2013ProcessConn / Options",
++        "skeleton": "FMDPT-6000–DP–[Range+Diaphragm+Fill+Seal]–CableOutlet–[Signal+Display]–ProcessConn / Options",
+         "example": "FMDPT-6000-DP-S105DSSN-R2-HC-H1/B6 = 0-10 bar DP, SS316L, HART + LCD"
+       },
+       "codeTable": [
+@@ -4325,7 +4340,7 @@
+       "valMin": 0.02,
+       "valMax": 100,
+       "tempMax": 85,
+-      "accuracy": "\u00b10.05% (opt.) to \u00b10.075% URL at TD\u22645",
++      "accuracy": "±0.05% (opt.) to ±0.075% URL at TD≤5",
+       "output": "hart",
+       "hazardous": "both",
+       "connection": "1/4-18 NPT(F), integrated valve manifold option",
+@@ -4347,7 +4362,7 @@
+         "Diaphragm options": "316L / HC-276 (Hastelloy) / Tantalum (all extended lead time except 316L)"
+       },
+       "orderCode": {
+-        "skeleton": "FMDPT-7000\u2013[HazArea+Output+Case+Connector+Display+Range+Sensor+Wetted+Oil+Bolting+Mount+Conn] / Options",
++        "skeleton": "FMDPT-7000–[HazArea+Output+Case+Connector+Display+Range+Sensor+Wetted+Oil+Bolting+Mount+Conn] / Options",
+         "example": "FMDPT-7000-0HS1L-1A1S6H/G1 = 0-50 mbar, non-hazardous, HART + LCD"
+       },
+       "codeTable": [
+@@ -4613,7 +4628,7 @@
+         }
+       ],
+       "deviations": [
+-        "Datasheet notes \"some certifications are in process\" \u2014 confirm current certificate status with Forbes Marshall before quoting."
++        "Datasheet notes \"some certifications are in process\" — confirm current certificate status with Forbes Marshall before quoting."
+       ]
+     },
+     {
+@@ -4624,7 +4639,7 @@
+       "valMin": -200,
+       "valMax": 1800,
+       "tempMax": 80,
+-      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
++      "accuracy": "RTD ±0.1% F.S.; TC ±0.2% F.S.",
+       "output": "4-20mA",
+       "hazardous": "safe",
+       "connection": "Head-mount, Form-B compatible, M4x2 screws",
+@@ -4645,13 +4660,13 @@
+       ],
+       "extraSpec": {
+         "Sensor types": "RTD Pt100; TC K/J/S/R/N",
+-        "CJC range/accuracy": "\u221240 to +80\u00b0C, \u00b11\u00b0C",
++        "CJC range/accuracy": "−40 to +80°C, ±1°C",
+         "Sensor-break output": "21 mA"
+       },
+       "orderCode": null,
+       "codeTable": null,
+       "deviations": [
+-        "No segmented order code published \u2014 order by stating sensor type, calibrated range, output and mounting directly."
++        "No segmented order code published — order by stating sensor type, calibrated range, output and mounting directly."
+       ]
+     },
+     {
+@@ -4662,7 +4677,7 @@
+       "valMin": -200,
+       "valMax": 1800,
+       "tempMax": 80,
+-      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
++      "accuracy": "RTD ±0.1% F.S.; TC ±0.2% F.S.",
+       "output": "4-20mA",
+       "hazardous": "safe",
+       "connection": "Head-mount, Form-B compatible, M4x2 screws",
+@@ -4681,7 +4696,7 @@
+       ],
+       "extraSpec": {
+         "Sensor types": "RTD Pt100/Cu50/Cu100 (Pt1000/WRe custom); TC K/J/S/R/N",
+-        "CJC range/accuracy": "\u221240 to +80\u00b0C, \u00b11\u00b0C",
++        "CJC range/accuracy": "−40 to +80°C, ±1°C",
+         "Input-break output": "21 mA"
+       },
+       "orderCode": null,
+@@ -4694,11 +4709,11 @@
+       "model": "FMTT-712",
+       "family": "HART Smart Head Mount Temperature Transmitter",
+       "category": "temp_transmitter",
+-      "blurb": "Universal RTD/TC/resistance/voltage input, HART 7, 1500VAC isolation \u2014 drop-in replacement for Rosemount 248.",
++      "blurb": "Universal RTD/TC/resistance/voltage input, HART 7, 1500VAC isolation — drop-in replacement for Rosemount 248.",
+       "valMin": -200,
+       "valMax": 2300,
+       "tempMax": 80,
+-      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
++      "accuracy": "RTD ±0.1% F.S.; TC ±0.2% F.S.",
+       "output": "hart",
+       "hazardous": "safe",
+       "connection": "DIN B / Form-B head mount, M3x2 screws",
+@@ -4717,7 +4732,7 @@
+         "Rosemount replacement"
+       ],
+       "extraSpec": {
+-        "Sensor types": "RTD Pt100/Pt1000/Cu100/Cu50; TC K/E/S/B/J/T/R/N/WRe5/WRe3; resistance 0-4000\u03a9; voltage \u00b1800mV",
++        "Sensor types": "RTD Pt100/Pt1000/Cu100/Cu50; TC K/E/S/B/J/T/R/N/WRe5/WRe3; resistance 0-4000Ω; voltage ±800mV",
+         "Compatible configurators": "Rosemount 275, 375 and other mainstream field configurators",
+         "Sensor-break output": "20.8 mA"
+       },
+@@ -4728,4 +4743,4 @@
+       ]
+     }
+   ]
+-}
+\ No newline at end of file
++}
+diff --git a/db/schema.sql b/db/schema.sql
+index 613ba07..c0f27b5 100644
+--- a/db/schema.sql
++++ b/db/schema.sql
+@@ -29,9 +29,19 @@ CREATE TABLE products (
+   hazardous         TEXT NOT NULL,        -- 'safe' | 'flameproof' | 'both'
+   connection        TEXT,
+   no_code           BOOLEAN DEFAULT FALSE,-- true if no catalogue order code exists (see products_seed.json)
++  datasheet_text    TEXT,                  -- full parsed text of the CURRENT published datasheet PDF, copied from
++                                            -- catalogue_uploads.raw_text at publish time. Used ONLY for internal
++                                            -- full-text retrieval (matchEnquiry.js) when a spec the enquiry asked
++                                            -- about isn't in any of the structured columns/extra specs above —
++                                            -- never sent whole to the LLM, never used for anything customer-facing.
+   created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ );
++-- Postgres built-in full-text search (no extension required) over each
++-- product's own datasheet text — this is the "internal catalogue RAG"
++-- retrieval path, deliberately NOT vector/embedding-based so it needs
++-- nothing beyond stock Postgres.
++CREATE INDEX idx_products_datasheet_fts ON products USING GIN (to_tsvector('english', coalesce(datasheet_text, '')));
+ -- NOTE: two temp_switch entries in products_seed.json have model:'—' (no dedicated code).
+ -- Assign them synthetic ids at seed time, e.g. 'TEMP-SW-WEATHERPROOF' / 'TEMP-SW-FLAMEPROOF'.
+ 
+@@ -135,8 +145,10 @@ CREATE TABLE enquiries (
+   uploaded_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ );
+ -- Valid stage values (enforce in application layer or CHECK constraint):
+---   'new' -> 'extracted' -> 'reviewed' -> 'matched' -> 'offer_drafted' -> 'offer_sent' -> 'won' | 'lost' | 'no_response'
+---   'abandoned' reachable from any stage
++--   'new' -> 'extracted' -> 'reviewed' -> 'matched' -> 'offer_drafted' -> 'offer_sent'
++-- 'offer_sent' is the last tracked stage — this app doesn't track what
++-- happens to an enquiry after the offer is generated/downloaded (no
++-- won/lost outcome). 'abandoned' is reachable from any stage before that.
+ 
+ CREATE TABLE enquiry_stage_history (
+   id            SERIAL PRIMARY KEY,
+@@ -188,11 +200,8 @@ CREATE TABLE offers (
+   version       INTEGER NOT NULL DEFAULT 1,
+   customer_json JSONB,                    -- snapshot of customer details at offer time
+   terms_json    JSONB,                    -- payment terms, validity, delivery
+-  status        TEXT NOT NULL DEFAULT 'draft',  -- 'draft' | 'sent' | 'won' | 'lost'
++  status        TEXT NOT NULL DEFAULT 'draft',  -- 'draft' | 'generated' — nothing past this is tracked
+   pdf_url       TEXT,
+-  won_at        TIMESTAMP,
+-  lost_at       TIMESTAMP,
+-  lost_reason   TEXT,
+   created_by    INTEGER REFERENCES users(id),
+   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ );
+diff --git a/package.json b/package.json
+index 5889410..7577671 100644
+--- a/package.json
++++ b/package.json
+@@ -10,6 +10,8 @@
+   "scripts": {
+     "db:migrate": "psql \"$DATABASE_URL\" -f db/schema.sql",
+     "db:seed": "node db/seed.js",
++    "db:export-catalogue": "node db/exportCatalogue.js",
++    "db:import-catalogue": "node db/importCatalogue.js",
+     "dev:server": "npm run dev --workspace=server"
+   },
+   "dependencies": {
+diff --git a/server/package.json b/server/package.json
+index d5f36ad..c7a11c0 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -18,9 +18,10 @@
+     "multer": "^2.0.1",
+     "pdf-parse": "^1.1.4",
+     "pg": "^8.12.0",
+-    "pizzip": "^3.1.7"
++    "pizzip": "^3.1.7",
++    "xlsx": "^0.18.5"
+   },
+   "devDependencies": {
+     "nodemon": "^3.1.4"
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/server/src/controllers/catalogueUploadsController.js b/server/src/controllers/catalogueUploadsController.js
+index 18f8f8c..059595f 100644
+--- a/server/src/controllers/catalogueUploadsController.js
++++ b/server/src/controllers/catalogueUploadsController.js
+@@ -142,20 +142,36 @@ async function publishCatalogue(req, res) {
+     await client.query('BEGIN');
+ 
+     await client.query(
+-      `INSERT INTO products (id, model, family, category_id, blurb, val_min, val_max, temp_max, accuracy, output_type, hazardous, connection, no_code)
+-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
++      `INSERT INTO products (id, model, family, category_id, blurb, val_min, val_max, temp_max, accuracy, output_type, hazardous, connection, no_code, datasheet_text)
++       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        ON CONFLICT (id) DO UPDATE SET
+          model=EXCLUDED.model, family=EXCLUDED.family, category_id=EXCLUDED.category_id, blurb=EXCLUDED.blurb,
+          val_min=EXCLUDED.val_min, val_max=EXCLUDED.val_max, temp_max=EXCLUDED.temp_max, accuracy=EXCLUDED.accuracy,
+-         output_type=EXCLUDED.output_type, hazardous=EXCLUDED.hazardous, connection=EXCLUDED.connection, updated_at=CURRENT_TIMESTAMP`,
++         output_type=EXCLUDED.output_type, hazardous=EXCLUDED.hazardous, connection=EXCLUDED.connection,
++         datasheet_text=EXCLUDED.datasheet_text, updated_at=CURRENT_TIMESTAMP`,
+       [p.id, p.model || p.id, p.family, upload.category_id, p.blurb || '', p.val_min ?? null, p.val_max ?? null,
+-       p.temp_max ?? null, p.accuracy || null, p.output_type || 'visual', p.hazardous || 'safe', p.connection || null, false]
++       p.temp_max ?? null, p.accuracy || null, p.output_type || 'visual', p.hazardous || 'safe', p.connection || null, false,
++       upload.raw_text || null]
+     );
+ 
+     for (const industry of p.industries || []) {
+       await client.query(`INSERT INTO product_industries (product_id, industry) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [p.id, industry]);
+     }
+ 
++    // Family-specific attributes (RTD wiring, switch differential, level
++    // measurement principle, indicator power type, etc.) that don't have a
++    // fixed products column — full replace on each (re-)publish so editing
++    // one in the review screen doesn't leave a stale duplicate behind.
++    await client.query(`DELETE FROM product_extra_spec WHERE product_id = $1`, [p.id]);
++    for (const spec of p.extra_specs || []) {
++      if (!spec?.label || !spec?.value) continue;
++      await client.query(
++        `INSERT INTO product_extra_spec (product_id, label, value) VALUES ($1,$2,$3)
++         ON CONFLICT (product_id, label) DO UPDATE SET value = EXCLUDED.value`,
++        [p.id, spec.label, spec.value]
++      );
++    }
++
+     await client.query(`UPDATE product_catalogue_files SET is_current = FALSE WHERE product_id = $1`, [p.id]);
+     const { rows: fileRows } = await client.query(
+       `SELECT COALESCE(MAX(version),0)+1 AS next_version FROM product_catalogue_files WHERE product_id = $1`, [p.id]
+diff --git a/server/src/controllers/enquiriesController.js b/server/src/controllers/enquiriesController.js
+index ff5cfaf..b3b4c03 100644
+--- a/server/src/controllers/enquiriesController.js
++++ b/server/src/controllers/enquiriesController.js
+@@ -1,13 +1,39 @@
+ // server/src/controllers/enquiriesController.js
+-const { matchEnquiry } = require('../services/matchEnquiry');
++const { matchEnquiries } = require('../services/matchEnquiry');
+ 
+-// POST /enquiries/match   { text: string }
++// POST /enquiries/match
++// Accepts EITHER:
++//   - JSON body { text, attachmentNames? }                (typed text only)
++//   - multipart/form-data with field "file" (PDF or Excel) and optional
++//     field "text" (any typed note to go alongside it)
++// A single request can produce MULTIPLE match results — one per enquiry
++// found in the text/file. Response shape: { text, items: [...], itemCount }
+ async function match(req, res) {
+-  const { text } = req.body;
+-  if (!text || !text.trim()) {
+-    return res.status(400).json({ error: 'text is required' });
++  const text = (req.body?.text || '').trim();
++  let attachmentNames = [];
++  if (req.body?.attachmentNames) {
++    try {
++      attachmentNames = Array.isArray(req.body.attachmentNames)
++        ? req.body.attachmentNames
++        : JSON.parse(req.body.attachmentNames);
++    } catch {
++      attachmentNames = [];
++    }
+   }
+-  const result = await matchEnquiry(text);
++  if (req.file) attachmentNames = [...attachmentNames, req.file.originalname];
++
++  if (!text && !req.file) {
++    return res.status(400).json({ error: 'text or file is required' });
++  }
++
++  const result = await matchEnquiries(text, { file: req.file, attachmentNames });
++
++  if (result.itemCount === 0) {
++    return res.status(422).json({
++      error: result.fileWarning || 'Could not extract any enquiries from the supplied text/file.',
++    });
++  }
++
+   res.json({ text, ...result });
+ }
+ 
+diff --git a/server/src/middleware/uploadEnquiryFile.js b/server/src/middleware/uploadEnquiryFile.js
+new file mode 100644
+index 0000000..c2b7891
+--- /dev/null
++++ b/server/src/middleware/uploadEnquiryFile.js
+@@ -0,0 +1,28 @@
++// server/src/middleware/uploadEnquiryFile.js
++//
++// Multer config for the enquiry-matching endpoint specifically. Kept
++// separate from middleware/upload.js (catalogue uploads), which is
++// deliberately PDF-only — enquiries additionally accept Excel, since a
++// sales team is far more likely to paste/forward a spreadsheet of RFQ line
++// items than a formatted datasheet-style PDF.
++
++const multer = require('multer');
++
++const upload = multer({
++  storage: multer.memoryStorage(),
++  limits: { fileSize: 25 * 1024 * 1024 },
++  fileFilter: (req, file, cb) => {
++    const okTypes = [
++      'application/pdf',
++      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
++      'application/vnd.ms-excel', // .xls
++    ];
++    if (okTypes.includes(file.mimetype)) {
++      cb(null, true);
++    } else {
++      cb(new Error(`Unsupported file type "${file.mimetype}" for enquiry matching — only PDF and Excel (.xlsx/.xls) content is parsed. Other attachments can still be added as reference, but their content won't drive matching.`));
++    }
++  },
++});
++
++module.exports = upload;
+diff --git a/server/src/routes/enquiries.js b/server/src/routes/enquiries.js
+index 7be48a1..d6cd10d 100644
+--- a/server/src/routes/enquiries.js
++++ b/server/src/routes/enquiries.js
+@@ -2,8 +2,11 @@
+ const express = require('express');
+ const router = express.Router();
+ const asyncHandler = require('../middleware/asyncHandler');
++const upload = require('../middleware/uploadEnquiryFile');
+ const ctrl = require('../controllers/enquiriesController');
+ 
+-router.post('/match', asyncHandler(ctrl.match));
++// upload.single() no-ops (leaves req.file undefined) for a plain JSON
++// request, so this route still accepts the old { text } JSON body too.
++router.post('/match', upload.single('file'), asyncHandler(ctrl.match));
+ 
+ module.exports = router;
+diff --git a/server/src/services/categoryAliases.js b/server/src/services/categoryAliases.js
+new file mode 100644
+index 0000000..df13174
+--- /dev/null
++++ b/server/src/services/categoryAliases.js
+@@ -0,0 +1,32 @@
++// server/src/services/categoryAliases.js
++//
++// Deterministic synonym table for category detection. This is the data-
++// driven fix for "the customer didn't use the exact words in our category
++// label" (e.g. "RTD sensor", "resistance thermometer", "PT100" should all
++// resolve to the `rtd` category) — maintained as plain data here, not
++// something a model needs to learn or be fine-tuned on. Extend this list
++// whenever a real enquiry uses a term that doesn't resolve.
++//
++// detectCategory() in parseEnquiryText.js checks these FIRST (cheap, exact,
++// instant). Only when nothing here or in the category label matches does
++// matchEnquiry.js fall back to an LLM classification constrained to the
++// real category id list (categoryClassifier.js) — never a model guessing
++// freely.
++
++const CATEGORY_ALIASES = {
++  pressure_gauge: ['pressure gauge', 'bourdon gauge', 'dial gauge', 'pressure dial', 'pg'],
++  pressure_transmitter: ['pressure transmitter', '4-20ma pressure', 'pressure transducer'],
++  smart_pressure_transmitter: ['smart pressure transmitter', 'hart pressure transmitter', 'modbus pressure transmitter', 'smart transmitter'],
++  smart_dp_transmitter: ['dp transmitter', 'differential pressure transmitter', 'smart dp transmitter'],
++  pressure_switch: ['pressure switch', 'pressure snap switch', 'pressure cutoff', 'high pressure switch', 'low pressure switch'],
++  dp_switch: ['dp switch', 'differential pressure switch'],
++  temp_transmitter: ['temperature transmitter', 'temp transmitter', 'rtd transmitter', 'thermocouple transmitter', 'tc transmitter'],
++  temp_switch: ['temperature switch', 'temp switch', 'thermostat switch', 'high temp switch'],
++  temperature_gauge: ['temperature gauge', 'temp gauge', 'dial thermometer', 'bimetal thermometer', 'bimetallic thermometer'],
++  level_gauge: ['level gauge', 'level indicator (visual)', 'visual level indicator', 'magnetic level gauge', 'reflex gauge', 'transparent gauge'],
++  level_switch: ['level switch', 'float switch', 'level cutoff', 'high level switch', 'low level switch'],
++  rtd: ['rtd', 'resistance thermometer', 'resistance temperature detector', 'pt100', 'pt-100', 'rtd sensor', 'rtd probe', 'rtd element'],
++  indicator: ['process indicator', 'loop powered indicator', 'loop-powered indicator', 'digital indicator', 'field indicator', '4-20ma indicator', 'local display'],
++};
++
++module.exports = { CATEGORY_ALIASES };
+diff --git a/server/src/services/categoryClassifier.js b/server/src/services/categoryClassifier.js
+new file mode 100644
+index 0000000..fc44d31
+--- /dev/null
++++ b/server/src/services/categoryClassifier.js
+@@ -0,0 +1,51 @@
++// server/src/services/categoryClassifier.js
++//
++// Fallback for when detectCategory()'s deterministic alias/label matching
++// (parseEnquiryText.js + categoryAliases.js) finds nothing — e.g. the
++// customer described the product entirely by application ("something to
++// shut down the boiler feed pump on low level") rather than naming it.
++// Constrained via JSON schema `enum` to the REAL category id list fetched
++// live from the database, so the model can only pick a category that
++// actually exists (or say none fit) — it can never invent one.
++
++const { extractStructured } = require('./llmClient');
++
++const SYSTEM_PROMPT = `You classify a customer enquiry into exactly one product category from the given list, based on what instrument they're describing (by function, application, or name — not necessarily using the category's exact wording).
++If the enquiry clearly doesn't describe any instrument in the list, or gives no usable technical/product detail at all, return category_id: null.
++Never return a category_id that isn't in the list you were given.`;
++
++function buildSchema(categoryIds) {
++  return {
++    type: 'object',
++    properties: {
++      category_id: {
++        type: ['string', 'null'],
++        enum: [...categoryIds, null],
++        description: 'One of the given category ids, or null if none fit.',
++      },
++    },
++    required: ['category_id'],
++  };
++}
++
++/**
++ * @param {string} text
++ * @param {Array<{id:string,label:string}>} categories
++ * @returns {Promise<string|null>}
++ */
++async function classifyCategory(text, categories) {
++  if (!text || !categories?.length) return null;
++  const schema = buildSchema(categories.map((c) => c.id));
++  const userText = `Enquiry text:\n${text}\n\nCategories (id — label):\n${categories.map((c) => `${c.id} — ${c.label}`).join('\n')}`;
++  try {
++    const { data } = await extractStructured(SYSTEM_PROMPT, userText, schema);
++    const id = data.category_id;
++    if (id && categories.some((c) => c.id === id)) return id;
++    return null;
++  } catch (err) {
++    console.error('LLM category classification failed:', err.message);
++    return null;
++  }
++}
++
++module.exports = { classifyCategory };
+diff --git a/server/src/services/enquiryFileParser.js b/server/src/services/enquiryFileParser.js
+new file mode 100644
+index 0000000..8a6f669
+--- /dev/null
++++ b/server/src/services/enquiryFileParser.js
+@@ -0,0 +1,162 @@
++// server/src/services/enquiryFileParser.js
++//
++// Turns an uploaded enquiry FILE (Excel or PDF) into one or more raw text
++// "blocks" — one block per distinct product enquiry — before anything gets
++// anywhere near the LLM. This is the classical/deterministic half of the
++// split, same philosophy as parseEnquiryText.js / preprocess.js: grouping
++// spreadsheet rows into logical items is exact, rule-based work; only the
++// genuinely ambiguous prose case (a PDF/typed paragraph) is handed to
++// splitEnquiries.js's LLM-assisted pass.
++//
++// Excel grouping heuristic ("detect blocks/groups intelligently", not a
++// rigid one-row-per-enquiry rule):
++//   1. Read the first non-empty sheet as an array of header-keyed row
++//      objects (row 1 = headers).
++//   2. If a column looks like an item/serial/enquiry identifier (header
++//      matches /^(s\.?\s?no\.?|sr\.?\s?no\.?|item\s?no\.?|enq(uiry)?\s?no\.?|line\s?no\.?|#)$/i),
++//      group consecutive rows by that value — rows sharing a value, or
++//      rows with that cell blank, belong to the previous group (common
++//      pattern for "one enquiry, multiple accessory lines").
++//   3. Otherwise, group by the first column that looks like a product/
++//      description field: a NEW group starts whenever that cell is
++//      non-empty; blank-in-that-column rows are folded into the current
++//      group as extra spec lines (again, the "accessory row" pattern).
++//   4. If neither heuristic finds a usable column (e.g. every row is fully
++//      populated with no distinguishing key), fall back to one row = one
++//      block, which is the common case for a flat "list of enquiries"
++//      sheet.
++// Every block keeps its original row range so the UI/audit trail can point
++// back to exactly which spreadsheet rows produced which match result.
++
++const XLSX = require('xlsx');
++const { extractText: extractPdfText } = require('./pdfParser');
++
++const ID_COLUMN_RE = /^(s\.?\s?no\.?|sr\.?\s?no\.?|item\s?no\.?|enq(uiry)?\s?no\.?|line\s?no\.?|#)$/i;
++const PRODUCT_COLUMN_RE = /^(product|item|description|equipment|instrument|requirement|particulars|specification)/i;
++
++function cellsToText(row) {
++  return Object.entries(row)
++    .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
++    .map(([k, v]) => `${k}: ${String(v).trim()}`)
++    .join('\n');
++}
++
++function isBlankRow(row) {
++  return Object.values(row).every((v) => v === null || v === undefined || String(v).trim() === '');
++}
++
++/**
++ * @param {Buffer} buffer
++ * @returns {{ blocks: Array<{ text: string, rowRange: string, rows: object[] }>, sheetName: string, columns: string[] }}
++ */
++function parseExcelEnquiries(buffer) {
++  const wb = XLSX.read(buffer, { type: 'buffer' });
++  const sheetName = wb.SheetNames.find((n) => {
++    const sheet = wb.Sheets[n];
++    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
++    return rows.length > 0;
++  }) || wb.SheetNames[0];
++
++  const sheet = wb.Sheets[sheetName];
++  const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false })
++    .map((r) => {
++      const cleaned = {};
++      for (const [k, v] of Object.entries(r)) {
++        const key = String(k).trim();
++        cleaned[key] = v;
++      }
++      return cleaned;
++    })
++    .filter((r) => !isBlankRow(r));
++
++  if (rawRows.length === 0) {
++    return { blocks: [], sheetName, columns: [] };
++  }
++
++  const columns = Object.keys(rawRows[0]);
++  const idColumn = columns.find((c) => ID_COLUMN_RE.test(c));
++  const productColumn = columns.find((c) => PRODUCT_COLUMN_RE.test(c));
++
++  const groups = [];
++  let current = null;
++  let lastIdValue = undefined;
++
++  rawRows.forEach((row, i) => {
++    const excelRowNo = i + 2; // +1 for 0-index, +1 for header row
++    if (idColumn) {
++      const idVal = row[idColumn] != null ? String(row[idColumn]).trim() : '';
++      const startsNew = idVal !== '' && idVal !== lastIdValue;
++      if (startsNew || !current) {
++        current = { rows: [row], startRow: excelRowNo, endRow: excelRowNo };
++        groups.push(current);
++        if (idVal !== '') lastIdValue = idVal;
++      } else {
++        current.rows.push(row);
++        current.endRow = excelRowNo;
++      }
++    } else if (productColumn) {
++      const productVal = row[productColumn] != null ? String(row[productColumn]).trim() : '';
++      const startsNew = productVal !== '' || !current;
++      if (startsNew) {
++        current = { rows: [row], startRow: excelRowNo, endRow: excelRowNo };
++        groups.push(current);
++      } else {
++        current.rows.push(row);
++        current.endRow = excelRowNo;
++      }
++    } else {
++      // No recognizable grouping column — one row is one enquiry.
++      current = { rows: [row], startRow: excelRowNo, endRow: excelRowNo };
++      groups.push(current);
++    }
++  });
++
++  const blocks = groups.map((g) => ({
++    text: g.rows.map(cellsToText).join('\n---\n'),
++    rowRange: g.startRow === g.endRow ? `row ${g.startRow}` : `rows ${g.startRow}-${g.endRow}`,
++    rows: g.rows,
++  })).filter((b) => b.text.trim() !== '');
++
++  return { blocks, sheetName, columns };
++}
++
++const EXCEL_MIME_TYPES = new Set([
++  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
++  'application/vnd.ms-excel', // .xls
++]);
++
++function isExcelMime(mimetype) {
++  return EXCEL_MIME_TYPES.has(mimetype);
++}
++function isPdfMime(mimetype) {
++  return mimetype === 'application/pdf';
++}
++
++/**
++ * Normalizes ANY supported enquiry attachment (Excel or PDF) down to either
++ * a set of pre-grouped text blocks (Excel — grouping already done, exact)
++ * or a single raw text blob (PDF — grouping still needs splitEnquiries.js's
++ * LLM-assisted pass, since a datasheet/RFQ letter's structure isn't a grid).
++ *
++ * @param {{ buffer: Buffer, mimetype: string, originalname: string }} file
++ * @returns {Promise<{ kind: 'excel'|'pdf', blocks?: object[], text?: string, warning?: string }>}
++ */
++async function parseEnquiryFile(file) {
++  if (isExcelMime(file.mimetype)) {
++    const { blocks, sheetName, columns } = parseExcelEnquiries(file.buffer);
++    if (blocks.length === 0) {
++      return { kind: 'excel', blocks: [], warning: `"${file.originalname}" (sheet "${sheetName}") had no readable rows.` };
++    }
++    return { kind: 'excel', blocks, sheetName, columns };
++  }
++  if (isPdfMime(file.mimetype)) {
++    const { text, quality } = await extractPdfText(file.buffer);
++    if (quality === 'likely_scanned') {
++      return { kind: 'pdf', text, warning: `"${file.originalname}" looks scanned/image-based — little or no text could be extracted. OCR isn't supported yet.` };
++    }
++    return { kind: 'pdf', text };
++  }
++  throw new Error(`Unsupported enquiry file type "${file.mimetype}" — only PDF and Excel (.xlsx/.xls) are accepted.`);
++}
++
++module.exports = { parseEnquiryFile, parseExcelEnquiries, isExcelMime, isPdfMime };
+diff --git a/server/src/services/extractProductDraft.js b/server/src/services/extractProductDraft.js
+index 01e964e..b50da6e 100644
+--- a/server/src/services/extractProductDraft.js
++++ b/server/src/services/extractProductDraft.js
+@@ -41,8 +41,22 @@ async function extractProductDraft(rawText, categoryLabel = null) {
+     output_type: crossValidateOutput(data.output_type, pre),
+     connection: data.connection ? 0.5 : 0.2,
+     industries: data.industries && data.industries.length ? 0.6 : 0.2,
++    extra_specs: (data.extra_specs && data.extra_specs.length) ? 0.5 : 0.2,
+   };
+ 
++  // "Label: Value" strings -> {label, value} pairs, for product_extra_spec.
++  // Dropped (not silently kept malformed) if a line doesn't have the colon —
++  // better to lose one attribute than store garbage the admin didn't see.
++  const extraSpecs = (data.extra_specs || [])
++    .map((line) => {
++      const idx = String(line).indexOf(':');
++      if (idx < 0) return null;
++      const label = line.slice(0, idx).trim();
++      const value = line.slice(idx + 1).trim();
++      return label && value ? { label, value } : null;
++    })
++    .filter(Boolean);
++
+   return {
+     extracted: {
+       id: data.id || null,
+@@ -57,6 +71,7 @@ async function extractProductDraft(rawText, categoryLabel = null) {
+       hazardous: data.hazardous,
+       connection: data.connection || null,
+       industries: data.industries || [],
++      extra_specs: extraSpecs,
+     },
+     confidence,
+     provider: `local-ollama-${model}`,
+diff --git a/server/src/services/internalDatasheetLookup.js b/server/src/services/internalDatasheetLookup.js
+new file mode 100644
+index 0000000..127848b
+--- /dev/null
++++ b/server/src/services/internalDatasheetLookup.js
+@@ -0,0 +1,84 @@
++// server/src/services/internalDatasheetLookup.js
++//
++// The "if information is missing from the structured fields, retrieve
++// reliable information from elsewhere" requirement — kept entirely
++// internal, no internet. When matchEnquiry.js finds a spec the enquiry
++// asked about that neither a candidate's fixed columns nor its
++// product_extra_spec rows confirm, this searches that SAME product's own
++// published datasheet TEXT (already sitting in products.datasheet_text,
++// copied there at publish time) for it, using Postgres's built-in
++// full-text search — no vector DB/embedding model/extension required.
++//
++// Anti-hallucination contract, same shape as everywhere else in this app:
++//   1. Only ever searches the ONE candidate's own datasheet text — never
++//      other products', never anything outside what Forbes Marshall
++//      itself published.
++//   2. ts_headline() returns actual excerpted substrings of that text, not
++//      anything synthesized.
++//   3. The LLM step is given ONLY those excerpts and is explicitly told to
++//      answer null if they don't state the answer — never to reason from
++//      its own trained knowledge of what such a product "usually" has.
++//   4. Every value shown to the user is paired with the excerpt it came
++//      from and a link back to the actual datasheet PDF (already served
++//      at /products/:id/catalogue) — never presented as a bare fact.
++
++const db = require('../config/db');
++const { extractStructured } = require('./llmClient');
++
++/**
++ * @param {string} productId
++ * @param {string} question - plain-language description of the missing spec
++ * @returns {Promise<{ excerpt: string, rank: number }|null>}
++ */
++async function searchDatasheet(productId, question) {
++  const { rows } = await db.query(
++    `SELECT
++       ts_headline('english', datasheet_text, plainto_tsquery('english', $2),
++         'MaxFragments=3, MinWords=6, MaxWords=40, StartSel=<<, StopSel=>>') AS excerpt,
++       ts_rank(to_tsvector('english', coalesce(datasheet_text, '')), plainto_tsquery('english', $2)) AS rank
++     FROM products
++     WHERE id = $1 AND datasheet_text IS NOT NULL AND datasheet_text != ''`,
++    [productId, question]
++  );
++  // ts_rank on a near-total mismatch still returns a nonzero float (e.g.
++  // 1e-20, not exactly 0) — a small floor, not <= 0, is what actually
++  // filters out "nothing relevant found."
++  if (!rows.length || rows[0].rank < 0.01) return null;
++  return { excerpt: rows[0].excerpt, rank: Number(rows[0].rank) };
++}
++
++const lookupSchema = {
++  type: 'object',
++  properties: {
++    found: { type: 'boolean', description: 'true only if the excerpt explicitly states the answer.' },
++    value: { type: ['string', 'null'], description: 'The value as stated in the excerpt, verbatim or near-verbatim. Null if not found.' },
++  },
++  required: ['found'],
++};
++
++const SYSTEM_PROMPT = `You answer a specific technical question using ONLY the datasheet excerpt given to you.
++The excerpt may contain <<...>> markers around the most relevant parts — read the whole excerpt regardless.
++If the excerpt doesn't state the answer clearly, set found=false and value=null — do NOT guess, infer from general product knowledge, or use anything not present in the excerpt.
++If it does state it, quote or closely paraphrase the excerpt's own wording.`;
++
++/**
++ * @param {string} productId
++ * @param {string} question
++ * @returns {Promise<{ found: boolean, value: string|null, source: {productId:string, excerpt:string}|null }>}
++ */
++async function lookupSpecInDatasheet(productId, question) {
++  const hit = await searchDatasheet(productId, question);
++  if (!hit) return { found: false, value: null, source: null };
++
++  const userText = `Question: ${question}\n\nDatasheet excerpt:\n${hit.excerpt}`;
++  try {
++    const { data } = await extractStructured(SYSTEM_PROMPT, userText, lookupSchema);
++    if (!data.found || data.value == null) return { found: false, value: null, source: null };
++    return { found: true, value: data.value, source: { productId, excerpt: hit.excerpt.replace(/<<|>>/g, '') } };
++  } catch (err) {
++    console.error('Internal datasheet lookup grounding failed:', err.message);
++    return { found: false, value: null, source: null };
++  }
++}
++
++module.exports = { lookupSpecInDatasheet, searchDatasheet };
+diff --git a/server/src/services/matchEnquiry.js b/server/src/services/matchEnquiry.js
+index 731dee3..f3ed4ae 100644
+--- a/server/src/services/matchEnquiry.js
++++ b/server/src/services/matchEnquiry.js
+@@ -1,9 +1,8 @@
+ // server/src/services/matchEnquiry.js
+ //
+-// Phase 6: turns a free-text enquiry into a ranked list of real catalogue
+-// products. Two-stage pipeline, same "classical text processing for the
+-// deterministic parts, LLM for the language-shaped judgement" split used by
+-// extractProductDraft.js:
++// Turns one or more free-text enquiries into ranked lists of real catalogue
++// products. Same "classical text processing for the deterministic parts,
++// LLM for the language-shaped judgement" split used elsewhere:
+ //
+ //   1. detectCategory() (regex, deterministic) narrows the candidate set to
+ //      one product family (e.g. "pressure_transmitter") so a pressure
+@@ -11,7 +10,29 @@
+ //   2. The LLM reads the enquiry text + the full spec sheet of every
+ //      candidate IN THAT FAMILY (fetched live from the products table, which
+ //      is populated only from admin-published catalogue uploads — never
+-//      hardcoded) and returns a ranked, scored, reasoned match.
++//      hardcoded, and never made up by the model) and returns a ranked,
++//      scored, reasoned match. INTERNAL CATALOGUES ARE ALWAYS THE FIRST AND
++//      PRIMARY SOURCE.
++//   3. Only for specs the enquiry explicitly asked about that NO candidate's
++//      structured fields OR extra specs confirm, internalDatasheetLookup.js
++//      searches that SAME candidate's own published datasheet TEXT (via
++//      Postgres full-text search — no internet, no vector DB) and, if
++//      found, extracts it via an LLM call strictly grounded in that
++//      excerpt. If nothing is found there either, the spec is reported as
++//      missing, never guessed. Internal data only, always — this app never
++//      calls out to the internet.
++//   4. Separately, computeClarificationsNeeded() flags parameters the
++//      ENQUIRY itself left unstated where the top candidates still
++//      genuinely differ — i.e. exactly the information a sales engineer
++//      would need to ask the customer for before the match can be
++//      finalized to one specific model, not just "the catalogue doesn't
++//      say."
++//
++// A single document (Excel/PDF/typed text) can describe MULTIPLE product
++// enquiries. matchEnquiries() splits it (enquiryFileParser.js for
++// spreadsheets, splitEnquiries.js for prose/PDF text) and runs the full
++// pipeline once per item, so N stated enquiries produce N independent
++// match results.
+ //
+ // If Ollama is unreachable, falls back to a deterministic scorer so the
+ // feature degrades instead of hard-failing.
+@@ -19,6 +40,10 @@
+ const db = require('../config/db');
+ const { extractStructured } = require('./llmClient');
+ const { parseEnquiryText, detectCategory } = require('./parseEnquiryText');
++const { parseEnquiryFile, isExcelMime, isPdfMime } = require('./enquiryFileParser');
++const { splitEnquiryText } = require('./splitEnquiries');
++const { classifyCategory } = require('./categoryClassifier');
++const { lookupSpecInDatasheet } = require('./internalDatasheetLookup');
+ 
+ const matchSchema = {
+   type: 'object',
+@@ -44,11 +69,12 @@ const matchSchema = {
+ };
+ 
+ const SYSTEM_PROMPT = `You are a Forbes Marshall sales engineer matching a customer enquiry to the correct instrument model.
+-You will be given the enquiry text and a JSON list of candidate products from the SAME family (e.g. all pressure transmitters), each with its real datasheet specs.
+-Score EVERY candidate 0-100 on how well it satisfies the enquiry: range coverage, hazardous area, output type (HART/4-20mA/switch/modbus), max temperature, accuracy, and process connection where stated.
++You will be given the enquiry text and a JSON list of candidate products from the SAME family (e.g. all pressure transmitters, or all RTDs, or all process indicators), each with its real datasheet specs. This candidate list is the ONLY source of truth about the products — it comes directly from Forbes Marshall's published catalogue.
++Score EVERY candidate 0-100 on how well it satisfies the enquiry, using WHICHEVER of the following the candidate JSON actually has values for: range coverage, hazardous area, output type (HART/4-20mA/switch/modbus/visual), max temperature, accuracy, process connection, and the "extra_specs" list — this last one is where family-specific attributes live (e.g. an RTD's wiring/element type, a switch's differential/contact rating, a level instrument's measurement principle, an indicator's power/display type). Treat extra_specs entries with the same weight as the fixed fields when the enquiry mentions that attribute.
+ A product whose range is far wider than requested is workable but not a perfect fit — prefer a snug match over an oversized one, and note it as a deviation, not a missing spec.
+-Never invent a product id that is not in the candidate list. If nothing fits well, still return your best-ranked candidates rather than an empty list.
+-IMPORTANT — deviations must never be left empty when percent < 100: for every attribute where the product's actual spec differs from, or goes beyond, what the enquiry stated, add one short phrase to deviations (e.g. "Range 0-6000mm is far wider than requested", "No HART, output is visual only"). If the enquiry simply didn't state a value for something the product datasheet does specify, put that in missing_specs instead (e.g. "Accuracy not stated by customer — product is ±1% FS"), not deviations. Only use a low percent AND leave deviations sparse when the enquiry itself is too vague to compare against (e.g. contains no technical detail at all) — in that case say so plainly in reason.`;
++Never invent a product id that is not in the candidate list. Never invent, guess, or round a numeric spec value that is not present in the candidate JSON — if a candidate's field is null/absent and doesn't appear in its extra_specs either, treat that attribute as unconfirmed (missing_specs), not as a value you can supply yourself.
++If nothing fits well, still return your best-ranked candidates rather than an empty list.
++IMPORTANT — deviations must never be left empty when percent < 100: for every attribute where the product's actual spec differs from, or goes beyond, what the enquiry stated, add one short phrase to deviations (e.g. "Range 0-6000mm is far wider than requested", "No HART, output is visual only", "3-wire only, enquiry asked for 4-wire"). If the enquiry simply didn't state a value for something the product datasheet does specify, put that in missing_specs instead (e.g. "Accuracy not stated by customer — product is ±1% FS"), not deviations. Only use a low percent AND leave deviations sparse when the enquiry itself is too vague to compare against (e.g. contains no technical detail at all) — in that case say so plainly in reason.`;
+ 
+ function buildCandidateSummary(products) {
+   return products.map((p) => ({
+@@ -62,6 +88,7 @@ function buildCandidateSummary(products) {
+     hazardous: p.hazardous,
+     connection: p.connection,
+     blurb: p.blurb,
++    extra_specs: (p.extra_specs || []).map((s) => `${s.label}: ${s.value}`),
+   }));
+ }
+ 
+@@ -118,50 +145,172 @@ async function runFallback(parsed, products) {
+     .sort((a, b) => b.percent - a.percent);
+ }
+ 
++/** Structured requested-vs-actual table, built deterministically from the
++ * regex-parsed enquiry and the candidate's real catalogue fields — this is
++ * the exact-value comparison the UI shows alongside the LLM's free-text
++ * matching/deviation/missing lists. Never touches the LLM, so it can't drift
++ * from what's actually in the database. */
++function buildRequestedVsActual(parsed, product) {
++  const rows = [];
++  rows.push({
++    parameter: 'Range',
++    requested: parsed.range ? `${parsed.range.min} to ${parsed.range.max}` : null,
++    actual: (product.val_min != null && product.val_max != null) ? `${product.val_min} to ${product.val_max}` : null,
++  });
++  rows.push({
++    parameter: 'Max temperature',
++    requested: parsed.tempMax != null ? `${parsed.tempMax}°C` : null,
++    actual: product.temp_max != null ? `${product.temp_max}°C` : null,
++  });
++  rows.push({
++    parameter: 'Area classification',
++    requested: parsed.hazardous || null,
++    actual: product.hazardous || null,
++  });
++  rows.push({
++    parameter: 'Output type',
++    requested: parsed.outputCandidates.length ? parsed.outputCandidates.join(', ') : null,
++    actual: product.output_type || null,
++  });
++  rows.push({ parameter: 'Accuracy', requested: null, actual: product.accuracy || null });
++  rows.push({ parameter: 'Process connection', requested: null, actual: product.connection || null });
++
++  return rows.map((r) => {
++    let status;
++    if (r.requested == null && r.actual == null) status = 'unspecified';
++    else if (r.requested == null) status = 'not_requested';
++    else if (r.actual == null) status = 'missing';
++    else status = String(r.requested).toLowerCase() === String(r.actual).toLowerCase() ? 'match' : 'compare';
++    return { ...r, status };
++  }).filter((r) => r.status !== 'unspecified');
++}
++
++/**
++ * For missing_specs the LLM flagged (an enquiry-stated requirement no
++ * candidate's structured fields OR extra_specs confirm), search that SAME
++ * candidate's own published datasheet TEXT — internal only, no internet.
++ * Never called for anything the structured data already answered.
++ */
++async function enrichMissingSpecsFromDatasheet(result, categoryLabel) {
++  const sources = [];
++  if (!result.missingSpecs || result.missingSpecs.length === 0 || !result.product.has_catalogue) {
++    return { datasheetFindings: [], sources };
++  }
++
++  const datasheetFindings = [];
++  for (const spec of result.missingSpecs) {
++    const question = `For the Forbes Marshall ${result.product.model} (${categoryLabel || result.product.family}): ${spec}`;
++    try {
++      const found = await lookupSpecInDatasheet(result.product.id, question);
++      if (found.found && found.value && found.source) {
++        datasheetFindings.push({ spec, value: found.value, source: found.source });
++        sources.push({ type: 'catalogue_excerpt', productId: found.source.productId, excerpt: found.source.excerpt });
++      }
++    } catch (err) {
++      console.error('Datasheet enrichment failed for spec:', spec, err.message);
++    }
++  }
++  return { datasheetFindings, sources };
++}
++
++/**
++ * Flags parameters the ENQUIRY itself left unstated where the top
++ * candidates still genuinely disagree — i.e. information a sales engineer
++ * needs from the customer before the match can be narrowed to one exact
++ * model, as distinct from missingSpecs (which is about the CATALOGUE
++ * lacking data). Purely deterministic: compares real candidate values,
++ * flags a gap only when they actually differ. Never invents a value or a
++ * question — if every top candidate agrees, there's nothing to ask.
++ */
++function computeClarificationsNeeded(parsed, results) {
++  const top = results.slice(0, 3).filter((r) => r.product);
++  if (top.length < 2) return [];
++
++  const rawTextLower = (parsed.rawText || '').toLowerCase();
++  const clarifications = [];
++
++  const fixedDims = [
++    { label: 'Area classification (safe / flameproof / both)', specified: !!parsed.hazardous, get: (p) => p.hazardous },
++    { label: 'Output type', specified: parsed.outputCandidates.length > 0, get: (p) => p.output_type },
++    { label: 'Process connection', specified: /\b(npt|bsp|flange|thread|connection)\b/.test(rawTextLower), get: (p) => p.connection },
++    { label: 'Accuracy requirement', specified: /\b(accuracy|±|\+\/-|class\s?[a-b0-9])\b/.test(rawTextLower), get: (p) => p.accuracy },
++  ];
++  for (const dim of fixedDims) {
++    if (dim.specified) continue;
++    const distinctValues = [...new Set(top.map((r) => dim.get(r.product)).filter(Boolean))];
++    if (distinctValues.length > 1) {
++      clarifications.push({ parameter: dim.label, candidateValues: distinctValues });
++    }
++  }
++
++  // Family-specific attributes (product_extra_spec) — union of labels
++  // across the top candidates, same "differ + enquiry silent on it" test.
++  const labelSet = new Set();
++  top.forEach((r) => (r.product.extra_specs || []).forEach((s) => labelSet.add(s.label)));
++  for (const label of labelSet) {
++    if (rawTextLower.includes(label.toLowerCase())) continue; // enquiry did mention this attribute by name
++    const distinctValues = [...new Set(
++      top.map((r) => (r.product.extra_specs || []).find((s) => s.label === label)?.value).filter(Boolean)
++    )];
++    if (distinctValues.length > 1) {
++      clarifications.push({ parameter: label, candidateValues: distinctValues });
++    }
++  }
++
++  return clarifications;
++}
++
+ /**
+- * @param {string} text - raw enquiry text
+- * @param {{ attachmentNames?: string[] }} [opts] - filenames of any attached
+- *   files. Their names alone (not contents — that extraction isn't built
+- *   yet) are appended to the category-detection pass, since a filename like
+- *   "GPPE Pressure transmitter.xlsx" is often a strong hint even when the
+- *   typed message itself ("prepare an offer") has no product details.
+- * @returns {Promise<{ categoryId: string|null, parsed: object, results: object[], provider: string }>}
++ * Runs the full match pipeline for ONE enquiry's text.
++ * @param {string} text - raw enquiry text for this single item
++ * @param {{ attachmentNames?: string[], sourceExcerpt?: string, enrichFromDatasheet?: boolean }} [opts]
+  */
+-async function matchEnquiry(text, { attachmentNames = [] } = {}) {
++async function matchSingleEnquiry(text, { attachmentNames = [], enrichFromDatasheet = true } = {}) {
+   const { rows: categories } = await db.query('SELECT * FROM categories ORDER BY label');
+   const detectionText = [text, ...attachmentNames].join(' ');
+-  const categoryId = detectCategory(detectionText, categories);
+   const parsed = parseEnquiryText(text);
+ 
+-  // With no identifiable product family, don't fall back to scoring the
+-  // ENTIRE catalogue against the LLM — that's slow (a big prompt on a local
+-  // CPU model) and the results are meaningless anyway (cross-category
+-  // matches). Ask for a specific product type instead; this responds
+-  // instantly.
++  // Deterministic alias/label matching first (instant, exact); only if that
++  // finds nothing does an LLM classification step run, constrained to this
++  // exact category list so it can never invent a family that doesn't exist.
++  let categoryId = detectCategory(detectionText, categories);
++  let categorySource = categoryId ? 'alias' : null;
++  if (!categoryId) {
++    categoryId = await classifyCategory(detectionText, categories);
++    if (categoryId) categorySource = 'llm';
++  }
++
+   if (!categoryId) {
+     return {
++      text,
+       categoryId: null,
+       parsed,
+       results: [],
+       provider: 'none',
+-      warning: 'Could not identify a product family from this enquiry. Please mention the product type explicitly (e.g. "pressure transmitter", "temperature switch") — attachment contents aren\'t read yet, only typed text and file names.',
++      warning: 'Could not identify a product family from this enquiry. Please mention the product type explicitly (e.g. "pressure transmitter", "RTD", "process indicator").',
+     };
+   }
+ 
++  const categoryLabel = categories.find((c) => c.id === categoryId)?.label || null;
++
+   const candidateSql = `
+     SELECT p.*, c.label AS category_label,
+       EXISTS(
+         SELECT 1 FROM product_catalogue_files f
+         WHERE f.product_id = p.id AND f.is_current = TRUE
+-      ) AS has_catalogue
++      ) AS has_catalogue,
++      COALESCE(
++        (SELECT json_agg(json_build_object('label', es.label, 'value', es.value) ORDER BY es.label)
++         FROM product_extra_spec es WHERE es.product_id = p.id),
++        '[]'
++      ) AS extra_specs
+     FROM products p JOIN categories c ON c.id = p.category_id
+     WHERE p.category_id = $1
+     ORDER BY p.family, p.id`;
+   const { rows: candidates } = await db.query(candidateSql, [categoryId]);
+ 
+-  // Category detected, but nothing published under it yet.
+   if (candidates.length === 0) {
+-    return { categoryId, parsed, results: [], provider: 'none', warning: 'No products found for this enquiry\'s category. Check the admin console has published catalogue entries for this product family.' };
++    return { text, categoryId, parsed, results: [], provider: 'none', warning: 'No products found for this enquiry\'s category. Check the admin console has published catalogue entries for this product family.' };
+   }
+ 
+   let llmResults;
+@@ -193,7 +342,98 @@ async function matchEnquiry(text, { attachmentNames = [] } = {}) {
+     provider = 'fallback-deterministic';
+   }
+ 
+-  return { categoryId, parsed, results: llmResults, provider };
++  // Attach requested-vs-actual + sources (catalogue link always; datasheet
++  // text search only for the top few candidates and only when something is
++  // genuinely unconfirmed — running this for every candidate would be slow
++  // and mostly wasted).
++  const DATASHEET_ENRICH_TOP_N = 3;
++  for (let i = 0; i < llmResults.length; i++) {
++    const r = llmResults[i];
++    r.requestedVsActual = buildRequestedVsActual(parsed, r.product);
++    r.sources = [];
++    if (r.product.has_catalogue) {
++      r.sources.push({ type: 'catalogue', productId: r.product.id, label: `${r.product.model} — published datasheet` });
++    }
++    if (enrichFromDatasheet && i < DATASHEET_ENRICH_TOP_N) {
++      const { datasheetFindings, sources: datasheetSources } = await enrichMissingSpecsFromDatasheet(r, categoryLabel);
++      r.datasheetFindings = datasheetFindings;
++      r.sources.push(...datasheetSources);
++    } else {
++      r.datasheetFindings = [];
++    }
++  }
++
++  const clarificationsNeeded = computeClarificationsNeeded(parsed, llmResults);
++
++  return { text, categoryId, categorySource, parsed, results: llmResults, provider, clarificationsNeeded };
++}
++
++/**
++ * Backward-compatible single-enquiry entry point (existing callers/tests).
++ */
++async function matchEnquiry(text, opts = {}) {
++  return matchSingleEnquiry(text, opts);
++}
++
++/**
++ * Splits raw input (typed text and/or an uploaded Excel/PDF file) into
++ * however many product enquiries it actually contains, then runs the full
++ * match pipeline independently for each one.
++ *
++ * @param {string} text - typed message, may be empty if a file was attached
++ * @param {{ file?: { buffer: Buffer, mimetype: string, originalname: string }, attachmentNames?: string[] }} [opts]
++ * @returns {Promise<{ items: object[], itemCount: number, splitMethod: string, fileWarning?: string }>}
++ */
++async function matchEnquiries(text, { file, attachmentNames = [] } = {}) {
++  let rawItems = []; // [{ text, sourceExcerpt }]
++  let splitMethod = 'single';
++  let fileWarning;
++
++  if (file && (isExcelMime(file.mimetype) || isPdfMime(file.mimetype))) {
++    const parsed = await parseEnquiryFile(file);
++    if (parsed.warning) fileWarning = parsed.warning;
++
++    if (parsed.kind === 'excel') {
++      rawItems = (parsed.blocks || []).map((b) => ({
++        text: (text && text.trim() ? `${text.trim()}\n\n` : '') + b.text,
++        sourceExcerpt: b.text.slice(0, 240),
++        sourceRef: `${file.originalname} — ${b.rowRange}`,
++      }));
++      splitMethod = 'excel_rows';
++    } else if (parsed.kind === 'pdf') {
++      const fileText = parsed.text || '';
++      const combinedText = (text && text.trim() ? `${text.trim()}\n\n${fileText}` : fileText);
++      const { items, method } = await splitEnquiryText(combinedText);
++      rawItems = items.map((t) => ({ text: t, sourceExcerpt: t.slice(0, 240), sourceRef: file.originalname }));
++      splitMethod = method;
++    }
++  } else {
++    const { items, method } = await splitEnquiryText(text || '');
++    rawItems = items.map((t) => ({ text: t, sourceExcerpt: t.slice(0, 240), sourceRef: 'typed message' }));
++    splitMethod = method;
++  }
++
++  if (rawItems.length === 0) {
++    return { items: [], itemCount: 0, splitMethod, fileWarning };
++  }
++
++  // Sequential, not Promise.all: matching goes through a single local LLM
++  // (Ollama) instance with no request queue of its own — concurrent calls
++  // would either fail or silently serialize anyway, so do it predictably
++  // and keep memory bounded for large uploads.
++  const items = [];
++  for (let i = 0; i < rawItems.length; i++) {
++    const raw = rawItems[i];
++    const matched = await matchSingleEnquiry(raw.text, { attachmentNames });
++    items.push({
++      index: i,
++      sourceExcerpt: raw.sourceExcerpt,
++      sourceRef: raw.sourceRef,
++      ...matched,
++    });
++  }
++
++  return { items, itemCount: items.length, splitMethod, fileWarning };
+ }
+ 
+-module.exports = { matchEnquiry };
++module.exports = { matchEnquiry, matchSingleEnquiry, matchEnquiries };
+diff --git a/server/src/services/parseEnquiryText.js b/server/src/services/parseEnquiryText.js
+index 113df71..e8a384f 100644
+--- a/server/src/services/parseEnquiryText.js
++++ b/server/src/services/parseEnquiryText.js
+@@ -7,6 +7,8 @@
+ // reason about accuracy, connection, media, etc. that this regex pass
+ // doesn't attempt to capture.
+ 
++const { CATEGORY_ALIASES } = require('./categoryAliases');
++
+ const HAZARD_TERMS = /\b(ATEX|Ex[\s-]?d|Ex[\s-]?ia|flameproof|flame[\s-]?proof|explosion[\s-]?proof|hazardous area|classified area|Zone\s?[0-2])\b/i;
+ const SAFE_TERMS = /\b(weatherproof|weather[\s-]?proof|safe area)\b/i;
+ const OUTPUT_TERMS = {
+@@ -72,9 +74,13 @@ function detectCategory(text, categories) {
+         .split(/[/,]/)
+         .map((s) => s.trim())
+         .filter((s) => s.length >= 4);
+-      return { id: c.id, core, terms: [core, c.id.replace(/_/g, ' '), ...qualifier] };
++      const aliases = CATEGORY_ALIASES[c.id] || [];
++      return { id: c.id, core, terms: [core, c.id.replace(/_/g, ' '), ...qualifier, ...aliases] };
+     })
+-    .sort((a, b) => b.core.length - a.core.length);
++    // Longest term first, not just longest core label — an alias like
++    // "resistance temperature detector" should out-rank a shorter, more
++    // generic label elsewhere winning on core-length alone.
++    .sort((a, b) => Math.max(...b.terms.map((t) => t.length)) - Math.max(...a.terms.map((t) => t.length)));
+   for (const c of candidates) {
+     if (c.terms.some((t) => t && lower.includes(t))) return c.id;
+   }
+diff --git a/server/src/services/productDraftSchema.js b/server/src/services/productDraftSchema.js
+index 01d50a1..5c57e50 100644
+--- a/server/src/services/productDraftSchema.js
++++ b/server/src/services/productDraftSchema.js
+@@ -43,6 +43,11 @@ const productDraftSchema = {
+       items: { type: 'string' },
+       description: 'Industries/applications listed in the text, as short labels',
+     },
++    extra_specs: {
++      type: 'array',
++      items: { type: 'string' },
++      description: 'Any OTHER technical attribute stated in the text that matters for selecting this product but has no dedicated field above — the exact attribute varies by product family (e.g. for an RTD: "Wiring: 3-wire", "Element: Pt100 Class B"; for a switch: "Differential: adjustable, 10-20% of range", "Contact rating: 5A @ 250VAC"; for a level instrument: "Measurement principle: guided wave radar"; for an indicator: "Power: loop-powered, no external supply needed", "Display: 4-digit LCD"). Each entry MUST be formatted exactly as "Label: Value", one attribute per entry, using only what the text actually states. Leave empty if the text has nothing beyond the fixed fields above.',
++    },
+   },
+   required: ['family', 'blurb', 'output_type', 'hazardous'],
+ };
+diff --git a/server/src/services/splitEnquiries.js b/server/src/services/splitEnquiries.js
+new file mode 100644
+index 0000000..d455204
+--- /dev/null
++++ b/server/src/services/splitEnquiries.js
+@@ -0,0 +1,142 @@
++// server/src/services/splitEnquiries.js
++//
++// Splits a block of free-form enquiry text (typed into chat, or extracted
++// from a PDF) into one or more separate product enquiries. Same two-stage
++// split as everywhere else in this codebase: try classical/deterministic
++// pattern matching FIRST (numbered lists, blank-line paragraphs, obvious
++// "Item 2:" markers); only fall back to the LLM when the text is too
++// unstructured for that to work. This keeps the common case (a clean
++// numbered RFQ) instant and exact, and reserves the LLM for genuinely
++// ambiguous prose.
++//
++// IMPORTANT: this never invents content. The LLM path is constrained to
++// return VERBATIM substrings of the original text (checked below — any
++// item that doesn't match the source text closely enough is discarded and
++// the whole text is treated as a single enquiry instead of risking
++// fabricated/altered requirements).
++
++const { extractStructured } = require('./llmClient');
++
++// Matches a line that opens a new numbered/lettered item, e.g.
++// "1.", "1)", "Item 1:", "Enquiry 2 -", "(a)", "Sr No 3."
++const NUMBERED_ITEM_RE = /^\s*(?:item|enquiry|sr\.?\s?no\.?|s\.?\s?no\.?)?\s*[\(\[]?(\d{1,3}|[a-zA-Z])[\)\].:\-]\s+/i;
++
++/**
++ * Deterministic pass: split on blank-line-separated paragraphs, then check
++ * whether paragraphs look like a numbered list (in which case merge any
++ * numbering-less continuation lines into the preceding item).
++ * @returns {string[]|null} null if no confident split found
++ */
++function heuristicSplit(text) {
++  const normalized = text.replace(/\r\n/g, '\n').trim();
++  if (!normalized) return null;
++
++  const lines = normalized.split('\n');
++  const numberedStarts = lines
++    .map((line, i) => ({ i, isStart: NUMBERED_ITEM_RE.test(line) }))
++    .filter((x) => x.isStart);
++
++  if (numberedStarts.length >= 2) {
++    const items = [];
++    for (let n = 0; n < numberedStarts.length; n++) {
++      const start = numberedStarts[n].i;
++      const end = n + 1 < numberedStarts.length ? numberedStarts[n + 1].i : lines.length;
++      const chunk = lines.slice(start, end).join('\n').trim();
++      if (chunk) items.push(chunk);
++    }
++    if (items.length >= 2) return items;
++  }
++
++  // Fall back to blank-line-separated paragraphs, but only treat this as a
++  // real multi-enquiry split if several of them look like they carry real
++  // technical content (contain a digit — ranges/temperatures/quantities
++  // almost always do). A paragraph with no digit at all (an intro line like
++  // "We need pricing for the following items", or a closing pleasantry) is
++  // dropped rather than kept as its own bogus "enquiry" — it carries no
++  // requirement of its own to match against.
++  const paragraphs = normalized.split(/\n\s*\n+/).map((p) => p.trim()).filter(Boolean);
++  if (paragraphs.length >= 2) {
++    const withDigits = paragraphs.filter((p) => /\d/.test(p));
++    if (withDigits.length >= 2 && withDigits.length / paragraphs.length >= 0.5) {
++      return withDigits;
++    }
++  }
++
++  return null;
++}
++
++const splitSchema = {
++  type: 'object',
++  properties: {
++    items: {
++      type: 'array',
++      items: { type: 'string', description: 'Verbatim excerpt of the source text covering exactly one product enquiry. Copy the original wording — do not summarize, paraphrase, or add information.' },
++    },
++  },
++  required: ['items'],
++};
++
++const SPLIT_SYSTEM_PROMPT = `You split a customer enquiry document into separate product requests.
++Each item in your output must be a VERBATIM copy of the portion of the source text that describes ONE product/instrument requirement — do not reword, summarize, translate, or add anything.
++If the text only describes ONE product, return a single item containing the whole text.
++Never merge two different products into one item, and never split a single product's requirement across two items.`;
++
++/**
++ * Loose containment check used to reject any LLM "item" that isn't
++ * substantially the source text (guards against paraphrasing/hallucination).
++ */
++function isVerbatimEnough(item, sourceText) {
++  const normalize = (s) => s.toLowerCase().replace(/\s+/g, ' ').trim();
++  const normItem = normalize(item);
++  if (!normItem) return false;
++  const normSource = normalize(sourceText);
++  if (normSource.includes(normItem)) return true;
++  // Allow minor whitespace/punctuation drift: require most of the item's
++  // significant words to appear in the source, in order, as a fallback.
++  const words = normItem.split(' ').filter((w) => w.length > 2);
++  if (words.length === 0) return false;
++  let found = 0;
++  let searchFrom = 0;
++  for (const w of words) {
++    const idx = normSource.indexOf(w, searchFrom);
++    if (idx >= 0) { found++; searchFrom = idx; }
++  }
++  return found / words.length >= 0.85;
++}
++
++async function llmAssistedSplit(text) {
++  const userText = `Source text:\n${text}`;
++  const { data } = await extractStructured(SPLIT_SYSTEM_PROMPT, userText, splitSchema);
++  const items = (data.items || []).map((s) => String(s).trim()).filter(Boolean);
++  const verified = items.filter((item) => isVerbatimEnough(item, text));
++  if (verified.length === 0) return [text]; // couldn't verify anything — safest is to treat as one enquiry
++  return verified;
++}
++
++/**
++ * @param {string} text
++ * @returns {Promise<{ items: string[], method: 'heuristic'|'llm'|'single' }>}
++ */
++async function splitEnquiryText(text) {
++  const trimmed = (text || '').trim();
++  if (!trimmed) return { items: [], method: 'single' };
++
++  const heuristic = heuristicSplit(trimmed);
++  if (heuristic) return { items: heuristic, method: 'heuristic' };
++
++  // Only worth an LLM call for text long/complex enough that it PLAUSIBLY
++  // contains more than one enquiry — a short one-liner is virtually always
++  // a single request, and skipping the call keeps the common case fast.
++  const plausiblyMultiple = trimmed.length > 220 || (trimmed.match(/\bpressure\b|\btransmitter\b|\bswitch\b|\bgauge\b|\btemperature\b|\blevel\b/gi) || []).length >= 2;
++  if (!plausiblyMultiple) return { items: [trimmed], method: 'single' };
++
++  try {
++    const items = await llmAssistedSplit(trimmed);
++    return { items, method: items.length > 1 ? 'llm' : 'single' };
++  } catch (err) {
++    console.error('LLM-assisted enquiry split failed, treating as one enquiry:', err.message);
++    return { items: [trimmed], method: 'single' };
++  }
++}
++
++module.exports = { splitEnquiryText, heuristicSplit };
+diff --git a/web/src/api.js b/web/src/api.js
+index 932c878..38b8ad0 100644
+--- a/web/src/api.js
++++ b/web/src/api.js
+@@ -31,12 +31,29 @@ export const api = {
+   // The real matching pipeline: server fetches the relevant category's
+   // published catalogue products and asks the LLM (Ollama) to score them
+   // against the enquiry text. No client-side matching logic anymore.
+-  matchEnquiry: (text, attachmentNames) =>
+-    request('/enquiries/match', {
++  //
++  // A single call can return MULTIPLE enquiries' worth of results — the
++  // server splits an uploaded Excel/PDF (or a typed multi-item message)
++  // into one match set per enquiry it finds. Response shape:
++  // { text, items: [...], itemCount, splitMethod, fileWarning? }
++  //
++  // `file`, when given, is the one attachment whose CONTENT drives matching
++  // (a File object — PDF or Excel). Other attachments are still listed by
++  // name only via attachmentNames, same as before.
++  matchEnquiry: (text, attachmentNames, file) => {
++    if (file) {
++      const form = new FormData();
++      form.append('text', text || '');
++      form.append('file', file);
++      if (attachmentNames?.length) form.append('attachmentNames', JSON.stringify(attachmentNames));
++      return request('/enquiries/match', { method: 'POST', body: form });
++    }
++    return request('/enquiries/match', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ text, attachmentNames }),
+-    }),
++    });
++  },
+ 
+   // Offer generation — fills the real .docx template for the product's
+   // category. getOfferFields tells the frontend which placeholders that
+diff --git a/web/src/index.css b/web/src/index.css
+index 7599010..77d31ef 100644
+--- a/web/src/index.css
++++ b/web/src/index.css
+@@ -255,6 +255,41 @@ tr.row-selected { background: var(--fm-blue-10); }
+ 
+ .match-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+ 
++/* --- Multi-enquiry tab strip (one Excel/PDF upload -> several enquiries) --- */
++.enquiry-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
++.enquiry-tab {
++  display: flex; align-items: center; gap: 8px;
++  background: #fff; border: 1px solid var(--line); border-radius: 8px;
++  padding: 8px 14px; cursor: pointer; font-weight: 700;
++}
++.enquiry-tab:hover { border-color: var(--fm-blue-50); }
++.enquiry-tab-active { border-color: var(--navy); background: var(--fm-blue-10); }
++.enquiry-tab-num { color: var(--sub); font-size: 12px; }
++.enquiry-tab-pct { font-size: 13.5px; }
++
++/* --- Requested vs actual comparison table --- */
++.rva-table-wrap { margin: 16px 0; }
++.rva-table-wrap h4 { font-size: 12.5px; text-transform: uppercase; color: var(--steel); margin: 0 0 8px; }
++.rva-table th { background: var(--fm-blue-5); }
++.rva-status { font-weight: 700; font-size: 12.5px; }
++.rva-status.rva-match { color: var(--fm-success); }
++.rva-status.rva-compare { color: var(--fm-warning); }
++.rva-status.rva-missing { color: var(--fm-danger); }
++.rva-status.rva-not_requested { color: var(--sub); font-weight: 500; }
++
++/* --- Clarifications needed (info-gap) --- */
++.clarify-block { background: var(--fm-blue-5); border-color: var(--fm-blue-20); margin-bottom: 16px; }
++.clarify-block h4 { margin: 0 0 4px; font-size: 13px; color: var(--navy); }
++.clarify-block ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.8; }
++
++/* --- Sources --- */
++.sources-block { margin: 14px 0; padding: 10px 14px; border-radius: 8px; background: var(--fm-blue-5); border: 1px solid var(--line); }
++.sources-block h4 { margin: 0 0 6px; font-size: 12.5px; text-transform: uppercase; color: var(--steel); }
++.sources-block ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
++.sources-block a { color: var(--navy); }
++.source-type-chip { margin-left: 8px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .3px; color: var(--sub); background: var(--fm-blue-10); border-radius: 999px; padding: 1px 8px; }
++.source-link { font-size: 11.5px; color: var(--navy); }
++
+ .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; flex: 1; color: var(--sub); }
+ 
+ /* =========================================================================
+diff --git a/web/src/lib/mockData.js b/web/src/lib/mockData.js
+index 4dc7990..ba716d0 100644
+--- a/web/src/lib/mockData.js
++++ b/web/src/lib/mockData.js
+@@ -15,11 +15,13 @@ export function mockEnquiryLog() {
+     { id: 'ENQ-1041', company: 'Tata Steel', product_hint: 'Level switch, top mounted, 2m tank', stage: 'matched', assigned_to: 'A. Iyer', received_at: hours(5) },
+     { id: 'ENQ-1040', company: 'ITC Foods', product_hint: 'Hygienic pressure transmitter, tri-clamp', stage: 'reviewed', assigned_to: 'S. Rao', received_at: hours(9) },
+     { id: 'ENQ-1039', company: 'NTPC', product_hint: 'Differential pressure switch, filter monitoring', stage: 'new', assigned_to: null, received_at: hours(14) },
+-    { id: 'ENQ-1038', company: 'Aditya Birla Chemicals', product_hint: 'Temperature transmitter, universal input', stage: 'won', assigned_to: 'A. Iyer', received_at: hours(30) },
+-    { id: 'ENQ-1037', company: 'JSW Cement', product_hint: 'Weatherproof pressure switch', stage: 'lost', assigned_to: 'S. Rao', received_at: hours(48) },
++    { id: 'ENQ-1038', company: 'Aditya Birla Chemicals', product_hint: 'Temperature transmitter, universal input', stage: 'offer_sent', assigned_to: 'A. Iyer', received_at: hours(30) },
++    { id: 'ENQ-1037', company: 'JSW Cement', product_hint: 'Weatherproof pressure switch', stage: 'matched', assigned_to: 'S. Rao', received_at: hours(48) },
+   ];
+ }
+ 
++// Deliberately stops at "Offer Sent" — nothing downstream of an offer being
++// generated/downloaded is tracked, so there's no won/lost stage here.
+ export const STAGE_LABELS = {
+   new: 'New',
+   extracted: 'Extracted',
+@@ -27,6 +29,4 @@ export const STAGE_LABELS = {
+   matched: 'Matched',
+   offer_drafted: 'Offer Drafted',
+   offer_sent: 'Offer Sent',
+-  won: 'Won',
+-  lost: 'Lost',
+ };
+diff --git a/web/src/pages/AdminDashboard.jsx b/web/src/pages/AdminDashboard.jsx
+index f8d0f80..50edcaa 100644
+--- a/web/src/pages/AdminDashboard.jsx
++++ b/web/src/pages/AdminDashboard.jsx
+@@ -4,9 +4,11 @@ import { Link } from 'react-router-dom';
+ import TopBar from '../components/TopBar';
+ import { mockEnquiryLog, STAGE_LABELS } from '../lib/mockData';
+ 
++// Deliberately stops at "Offer Sent" — this app doesn't track anything
++// downstream of an offer being generated/downloaded (no won/lost outcome).
+ const STAGE_COLORS = {
+   new: '#8b8b8b', extracted: '#3b6ea5', reviewed: '#6b4fa0', matched: '#3b6ea5',
+-  offer_drafted: '#b8860b', offer_sent: '#b8860b', won: '#1f7a4d', lost: '#b03030',
++  offer_drafted: '#b8860b', offer_sent: '#1f7a4d',
+ };
+ 
+ export default function AdminDashboard() {
+@@ -16,8 +18,8 @@ export default function AdminDashboard() {
+ 
+   const counts = {
+     new: enquiries.filter((e) => e.stage === 'new').length,
+-    inProgress: enquiries.filter((e) => ['extracted', 'reviewed', 'matched', 'offer_drafted', 'offer_sent'].includes(e.stage)).length,
+-    closed: enquiries.filter((e) => ['won', 'lost'].includes(e.stage)).length,
++    inProgress: enquiries.filter((e) => ['extracted', 'reviewed', 'matched', 'offer_drafted'].includes(e.stage)).length,
++    offersSent: enquiries.filter((e) => e.stage === 'offer_sent').length,
+   };
+ 
+   return (
+@@ -33,14 +35,14 @@ export default function AdminDashboard() {
+         <div className="admin-stat-row">
+           <div className="admin-stat panel"><div className="admin-stat-num">{counts.new}</div><div className="admin-stat-label">New</div></div>
+           <div className="admin-stat panel"><div className="admin-stat-num">{counts.inProgress}</div><div className="admin-stat-label">In progress</div></div>
+-          <div className="admin-stat panel"><div className="admin-stat-num">{counts.closed}</div><div className="admin-stat-label">Closed</div></div>
++          <div className="admin-stat panel"><div className="admin-stat-num">{counts.offersSent}</div><div className="admin-stat-label">Offers sent</div></div>
+         </div>
+ 
+         <div className="panel">
+           <div className="admin-filter-row">
+             <h2 style={{ margin: 0 }}>Enquiry log</h2>
+             <div className="admin-filter-chips">
+-              {['all', 'new', 'matched', 'offer_sent', 'won', 'lost'].map((f) => (
++              {['all', 'new', 'matched', 'offer_sent'].map((f) => (
+                 <button key={f} className={`chip-btn ${filter === f ? 'chip-btn-active' : ''}`} onClick={() => setFilter(f)}>
+                   {f === 'all' ? 'All' : STAGE_LABELS[f]}
+                 </button>
+diff --git a/web/src/pages/CatalogueManager.jsx b/web/src/pages/CatalogueManager.jsx
+index 6eb577f..109068f 100644
+--- a/web/src/pages/CatalogueManager.jsx
++++ b/web/src/pages/CatalogueManager.jsx
+@@ -188,10 +188,29 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
+   const [upload, setUpload] = useState(null);
+   const [form, setForm] = useState(null);
+   const [industriesText, setIndustriesText] = useState('');
++  const [extraSpecsText, setExtraSpecsText] = useState('');
+   const [busy, setBusy] = useState(false);
+   const [error, setError] = useState(null);
+   const [categoryOverride, setCategoryOverride] = useState('');
+ 
++  // Extra specs are the family-specific attributes that don't have a fixed
++  // column (RTD wiring, switch differential, level measurement principle,
++  // indicator power type, etc.) — edited here as one "Label: Value" per
++  // line, same shape the AI draft produces, so the reviewer can add/fix
++  // whatever's specific to THIS product family before publishing.
++  function extraSpecsToText(specs) {
++    return (specs || []).map((s) => `${s.label}: ${s.value}`).join('\n');
++  }
++  function textToExtraSpecs(text) {
++    return text.split('\n').map((line) => {
++      const idx = line.indexOf(':');
++      if (idx < 0) return null;
++      const label = line.slice(0, idx).trim();
++      const value = line.slice(idx + 1).trim();
++      return label && value ? { label, value } : null;
++    }).filter(Boolean);
++  }
++
+   const load = useCallback(async () => {
+     if (!uploadId) return;
+     const data = await api.getUpload(uploadId);
+@@ -199,10 +218,11 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
+     setForm(
+       data.extracted_json || {
+         id: '', model: '', family: '', blurb: '', val_min: '', val_max: '', temp_max: '',
+-        accuracy: '', output_type: 'switch', hazardous: 'safe', connection: '', industries: [],
++        accuracy: '', output_type: 'switch', hazardous: 'safe', connection: '', industries: [], extra_specs: [],
+       }
+     );
+     setIndustriesText((data.extracted_json?.industries || []).join(', '));
++    setExtraSpecsText(extraSpecsToText(data.extracted_json?.extra_specs));
+     setCategoryOverride(data.category_id || '');
+     setError(null);
+   }, [uploadId]);
+@@ -234,6 +254,7 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
+       setUpload(updated);
+       setForm(updated.extracted_json);
+       setIndustriesText((updated.extracted_json?.industries || []).join(', '));
++      setExtraSpecsText(extraSpecsToText(updated.extracted_json?.extra_specs));
+       onChanged();
+     } catch (e) {
+       setError(e.message);
+@@ -252,6 +273,7 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
+         val_max: form.val_max === '' ? null : Number(form.val_max),
+         temp_max: form.temp_max === '' ? null : Number(form.temp_max),
+         industries: industriesText.split(',').map((s) => s.trim()).filter(Boolean),
++        extra_specs: textToExtraSpecs(extraSpecsText),
+       };
+       const updated = await api.updateDraft(uploadId, { category_id: categoryOverride || null, extracted_json: payload });
+       setUpload(updated);
+@@ -374,6 +396,18 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
+           <label><ConfidenceDot value={confidence.industries} /> Industries (comma-separated)</label>
+           <input value={industriesText} onChange={(e) => setIndustriesText(e.target.value)} />
+         </div>
++        <div className="field-row full">
++          <label><ConfidenceDot value={confidence.extra_specs} /> Extra specs — one per line, "Label: Value"</label>
++          <textarea
++            value={extraSpecsText}
++            onChange={(e) => setExtraSpecsText(e.target.value)}
++            rows={4}
++            placeholder={'Wiring: 3-wire\nElement: Pt100 Class B\nDifferential: adjustable, 10-20% of range'}
++          />
++          <p className="hint" style={{ marginTop: 2 }}>
++            Whatever matters for THIS product family and isn't one of the fixed fields above — matching uses these too.
++          </p>
++        </div>
+       </div>
+ 
+       {error && <div className="error-box">{error}</div>}
+diff --git a/web/src/pages/ChatPage.jsx b/web/src/pages/ChatPage.jsx
+index a79b4e4..73ddca6 100644
+--- a/web/src/pages/ChatPage.jsx
++++ b/web/src/pages/ChatPage.jsx
+@@ -6,6 +6,18 @@ import { api } from '../api';
+ import TopBar from '../components/TopBar';
+ 
+ const ACCEPTED = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt';
++// Of any attached files, the first one matching these types has its actual
++// CONTENT parsed and split into enquiries server-side (see api.matchEnquiry).
++// Others are still shown as attachments but only their filename is used
++// (as a category-detection hint), same as before this change.
++const CONTENT_MIME_TYPES = [
++  'application/pdf',
++  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
++  'application/vnd.ms-excel',
++];
++function isContentBearing(file) {
++  return CONTENT_MIME_TYPES.includes(file.type) || /\.(pdf|xlsx|xls)$/i.test(file.name);
++}
+ 
+ export default function ChatPage() {
+   const { chatHistory, saveToHistory, openHistoryEntry, enquiry, setEnquiry, startNewChat } = useApp();
+@@ -48,26 +60,38 @@ export default function ChatPage() {
+   }
+ 
+   async function handleSend() {
+-    if (!text.trim()) {
+-      setError('Type your requirement first.');
++    const contentFile = files.find(isContentBearing);
++    if (!text.trim() && !contentFile) {
++      setError('Type your requirement, or attach a PDF/Excel enquiry file.');
+       return;
+     }
+     setBusy(true);
+     setError(null);
+     try {
+-      // Single call: the server detects the product category, fetches only
+-      // that family's published catalogue products, and asks the LLM to
+-      // score them against the raw enquiry text. No matching logic runs
+-      // in the browser anymore.
+-      const { parsed, results, provider, warning } = await api.matchEnquiry(
++      // Single call: the server extracts content from the attached file (if
++      // any), SPLITS it into however many separate product enquiries it
++      // contains, then — per enquiry — detects the product category,
++      // fetches only that family's published catalogue products, and asks
++      // the LLM to score them. No matching logic runs in the browser.
++      const otherFileNames = files.filter((f) => f !== contentFile).map((f) => f.name);
++      const { items, itemCount, splitMethod, fileWarning } = await api.matchEnquiry(
+         text,
+-        files.map((f) => f.name)
++        otherFileNames,
++        contentFile
+       );
++      const warning = fileWarning;
+       if (warning) setError(warning);
+-      if (!results.length) {
+-        setError((prev) => prev || 'No matching products were found for this enquiry. Check the admin console has published catalogue entries for this product family.');
++      if (!itemCount) {
++        setError((prev) => prev || 'No enquiries could be identified in this text/file.');
+       }
+ 
++      // Give every match result its own local selectedIndex (which
++      // alternative product is currently shown for THAT enquiry), so
++      // flipping between enquiries on the matching page doesn't reset a
++      // reviewer's choice on the others.
++      const itemsWithSelection = (items || []).map((it) => ({ ...it, selectedIndex: 0 }));
++      const totalCandidates = itemsWithSelection.reduce((sum, it) => sum + (it.results?.length || 0), 0);
++
+       // Append this turn (user message + assistant summary) onto the
+       // existing thread instead of overwriting it, so reopening this
+       // conversation later shows the whole back-and-forth — not just the
+@@ -78,10 +102,11 @@ export default function ChatPage() {
+         {
+           role: 'assistant',
+           at: new Date().toISOString(),
+-          resultCount: results.length,
+-          topModel: results[0]?.product?.model,
+-          topPercent: results[0]?.percent,
+-          warning: warning || (!results.length ? 'No matching products found.' : null),
++          enquiryCount: itemCount,
++          resultCount: totalCandidates,
++          topModel: itemsWithSelection[0]?.results?.[0]?.product?.model,
++          topPercent: itemsWithSelection[0]?.results?.[0]?.percent,
++          warning: warning || (!itemCount ? 'No enquiries found in this text/file.' : null),
+         },
+       ];
+       const messages = [...(enquiry?.messages || []), ...turn];
+@@ -89,17 +114,16 @@ export default function ChatPage() {
+       const snapshot = {
+         text,
+         attachments: [...existingAttachments, ...newAttachments],
+-        parsed,
+-        results,
+-        provider,
+-        selectedIndex: 0,
++        items: itemsWithSelection,
++        selectedItemIndex: 0,
++        splitMethod,
+         messages,
+         historyId: enquiry?.historyId || Date.now(), // stable id: editing updates the same conversation, not a new one
+       };
+ 
+       saveToHistory(snapshot);
+       setEnquiry(snapshot);
+-      if (results.length) navigate('/matching');
++      if (itemCount) navigate('/matching');
+     } catch (e) {
+       setError(`Could not run matching: ${e.message}`);
+     } finally {
+@@ -149,13 +173,18 @@ export default function ChatPage() {
+                     <div className="chat-bubble chat-bubble-assistant" key={i}>
+                       {m.warning ? (
+                         m.warning
++                      ) : m.enquiryCount > 1 ? (
++                        <>
++                          Split this into <strong>{m.enquiryCount} enquiries</strong> — {m.resultCount} candidate matches total.
++                          Top result so far: <strong>{m.topModel}</strong> at <strong>{m.topPercent}%</strong>.
++                        </>
+                       ) : (
+                         <>
+                           Found {m.resultCount} candidate{m.resultCount === 1 ? '' : 's'} — top match{' '}
+                           <strong>{m.topModel}</strong> at <strong>{m.topPercent}%</strong>.
+                         </>
+                       )}
+-                      {i === enquiry.messages.length - 1 && enquiry.results?.length > 0 && (
++                      {i === enquiry.messages.length - 1 && enquiry.items?.length > 0 && (
+                         <div style={{ marginTop: 10 }}>
+                           <button className="secondary-btn" onClick={handleViewMatch}>View match results →</button>
+                         </div>
+@@ -224,7 +253,7 @@ export default function ChatPage() {
+             </button>
+           </div>
+           <p className="hint" style={{ padding: '0 20px 12px', margin: 0 }}>
+-            Attachments are captured and shown on the next screen. Matching is now done by the LLM against your published catalogue — automatic text extraction from PDF/DOCX/XLSX attachments is a future improvement; for now, typed text drives matching.
++            Attach a PDF or Excel enquiry file and its content is read automatically — if it contains multiple product requests, each one gets its own match result. Matching is done by the LLM against your published catalogue first; unconfirmed specs are looked up on the web only if that's enabled, and are always shown with a source. Other attachment types are listed for reference only.
+           </p>
+         </main>
+       </div>
+diff --git a/web/src/pages/MatchingPage.jsx b/web/src/pages/MatchingPage.jsx
+index 519db9d..4fc3f90 100644
+--- a/web/src/pages/MatchingPage.jsx
++++ b/web/src/pages/MatchingPage.jsx
+@@ -1,4 +1,13 @@
+ // web/src/pages/MatchingPage.jsx
++//
++// Shows the match result(s) for the current enquiry. A single uploaded
++// Excel/PDF (or a multi-item typed message) can contain several distinct
++// product enquiries — enquiry.items is always an array, one entry per
++// enquiry the server identified, each with its own independent ranked
++// candidate list. When there's only one item, this renders exactly as it
++// always did; when there are several, an "Enquiry 1 of N" strip lets the
++// reviewer step through them, and each keeps its own selected-alternative
++// state.
+ import React from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import { useApp } from '../context/AppContext';
+@@ -15,11 +24,30 @@ function MatchBadge({ percent, band }) {
+   );
+ }
+ 
++const STATUS_LABEL = {
++  match: 'Matches',
++  compare: 'Differs',
++  missing: 'Not confirmed',
++  not_requested: 'Not requested',
++};
++
++function RequestedVsActualRow({ row }) {
++  return (
++    <tr>
++      <td>{row.parameter}</td>
++      <td>{row.requested ?? '—'}</td>
++      <td>{row.actual ?? '—'}</td>
++      <td className={`rva-status rva-${row.status}`}>{STATUS_LABEL[row.status] || row.status}</td>
++    </tr>
++  );
++}
++
+ export default function MatchingPage() {
+   const { enquiry, setEnquiry, setOffer } = useApp();
+   const navigate = useNavigate();
+ 
+-  if (!enquiry || !enquiry.results?.length) {
++  const items = enquiry?.items;
++  if (!enquiry || !items?.length) {
+     return (
+       <div className="chat-shell">
+         <TopBar title="Product Match" />
+@@ -31,11 +59,19 @@ export default function MatchingPage() {
+     );
+   }
+ 
+-  const selected = enquiry.results[enquiry.selectedIndex];
+-  const p = selected.product;
++  const itemIndex = enquiry.selectedItemIndex ?? 0;
++  const item = items[itemIndex];
++  const hasResults = item.results?.length > 0;
++  const selected = hasResults ? item.results[item.selectedIndex ?? 0] : null;
++  const p = selected?.product;
++
++  function selectItem(idx) {
++    setEnquiry({ ...enquiry, selectedItemIndex: idx });
++  }
+ 
+   function selectAlternative(idx) {
+-    setEnquiry({ ...enquiry, selectedIndex: idx });
++    const updatedItems = items.map((it, i) => (i === itemIndex ? { ...it, selectedIndex: idx } : it));
++    setEnquiry({ ...enquiry, items: updatedItems });
+   }
+ 
+   /** Fully restart, exactly like relaunching the chatbot — clears the working
+@@ -64,18 +100,64 @@ export default function MatchingPage() {
+       <div className="match-page">
+         <div className="match-summary-bar">
+           <div>
+-            <div className="hint">Your enquiry</div>
+-            <div className="match-enquiry-text">"{enquiry.text}"</div>
++            <div className="hint">{items.length > 1 ? `Enquiry ${itemIndex + 1} of ${items.length}` : 'Your enquiry'}</div>
++            <div className="match-enquiry-text">"{item.sourceExcerpt || item.text}"</div>
++            {item.sourceRef && <div className="hint" style={{ marginTop: 4 }}>Source: {item.sourceRef}</div>}
+           </div>
+         </div>
+ 
++        {items.length > 1 && (
++          <div className="enquiry-tabs">
++            {items.map((it, i) => {
++              const top = it.results?.[0];
++              return (
++                <button
++                  key={i}
++                  className={`enquiry-tab ${i === itemIndex ? 'enquiry-tab-active' : ''}`}
++                  onClick={() => selectItem(i)}
++                >
++                  <span className="enquiry-tab-num">#{i + 1}</span>
++                  {top ? (
++                    <span className="enquiry-tab-pct" style={{ color: top.band === 'strong' ? 'var(--fm-success)' : top.band === 'workable' ? 'var(--fm-warning)' : 'var(--fm-danger)' }}>
++                      {top.percent}%
++                    </span>
++                  ) : (
++                    <span className="enquiry-tab-pct hint">no match</span>
++                  )}
++                </button>
++              );
++            })}
++          </div>
++        )}
++
++        {item.warning && <div className="error-box">{item.warning}</div>}
++
++        {item.clarificationsNeeded?.length > 0 && (
++          <div className="clarify-block panel">
++            <h4>🔎 Information needed to finalize the exact model</h4>
++            <p className="hint" style={{ marginTop: -4 }}>
++              The enquiry didn't specify these, and the top candidates differ on them — ask the customer before committing to one model.
++            </p>
++            <ul>
++              {item.clarificationsNeeded.map((c, i) => (
++                <li key={i}><strong>{c.parameter}</strong> — candidates offer: {c.candidateValues.join(' vs. ')}</li>
++              ))}
++            </ul>
++          </div>
++        )}
++
++        {!hasResults ? (
++          <div className="panel empty-state" style={{ padding: 30 }}>
++            <p>No candidate products found for this enquiry.</p>
++          </div>
++        ) : (
+         <div className="match-top">
+           <div className="match-primary-card panel">
+             <div className="match-primary-head">
+               <div>
+                 <div className="match-product-model">{p.model}</div>
+                 <div className="match-product-family">{p.family}</div>
+-                <div className="hint">Source: {p.category_label} catalogue{enquiry.provider ? ` · matched by ${enquiry.provider}` : ''}</div>
++                <div className="hint">Source: {p.category_label} catalogue{item.provider ? ` · matched by ${item.provider}` : ''}</div>
+               </div>
+               <MatchBadge percent={selected.percent} band={selected.band} />
+             </div>
+@@ -87,10 +169,10 @@ export default function MatchingPage() {
+               <div className="spec-compare-col">
+                 <h4>Enquiry requirement</h4>
+                 <ul>
+-                  <li>Range: {enquiry.parsed.range ? `${enquiry.parsed.range.min} to ${enquiry.parsed.range.max}` : 'not specified'}</li>
+-                  <li>Max temp: {enquiry.parsed.tempMax != null ? `${enquiry.parsed.tempMax}°C` : 'not specified'}</li>
+-                  <li>Area: {enquiry.parsed.hazardous || 'not specified'}</li>
+-                  <li>Output: {enquiry.parsed.outputCandidates.length ? enquiry.parsed.outputCandidates.join(', ') : 'not specified'}</li>
++                  <li>Range: {item.parsed.range ? `${item.parsed.range.min} to ${item.parsed.range.max}` : 'not specified'}</li>
++                  <li>Max temp: {item.parsed.tempMax != null ? `${item.parsed.tempMax}°C` : 'not specified'}</li>
++                  <li>Area: {item.parsed.hazardous || 'not specified'}</li>
++                  <li>Output: {item.parsed.outputCandidates.length ? item.parsed.outputCandidates.join(', ') : 'not specified'}</li>
+                 </ul>
+               </div>
+               <div className="spec-compare-col">
+@@ -102,10 +184,27 @@ export default function MatchingPage() {
+                   <li>Output: {p.output_type}</li>
+                   <li>Accuracy: {p.accuracy || '—'}</li>
+                   <li>Connection: {p.connection || '—'}</li>
++                  {(p.extra_specs || []).map((s, i) => (
++                    <li key={i}>{s.label}: {s.value}</li>
++                  ))}
+                 </ul>
+               </div>
+             </div>
+ 
++            {selected.requestedVsActual?.length > 0 && (
++              <div className="rva-table-wrap">
++                <h4>Requested vs actual</h4>
++                <table className="rva-table">
++                  <thead>
++                    <tr><th>Parameter</th><th>Requested</th><th>Actual</th><th>Status</th></tr>
++                  </thead>
++                  <tbody>
++                    {selected.requestedVsActual.map((row, i) => <RequestedVsActualRow row={row} key={i} />)}
++                  </tbody>
++                </table>
++              </div>
++            )}
++
+             {selected.matchingSpecs.length > 0 && (
+               <div className="match-list match-list-good">
+                 <h4>✓ Matching specifications</h4>
+@@ -125,6 +224,36 @@ export default function MatchingPage() {
+               </div>
+             )}
+ 
++            {selected.datasheetFindings?.length > 0 && (
++              <div className="match-list match-list-good">
++                <h4>📄 Found in the published datasheet</h4>
++                <ul>
++                  {selected.datasheetFindings.map((f, i) => (
++                    <li key={i}>
++                      <strong>{f.spec}:</strong> {f.value}{' '}
++                      <span className="hint">— "{f.source.excerpt}"</span>
++                    </li>
++                  ))}
++                </ul>
++              </div>
++            )}
++
++            {selected.sources?.length > 0 && (
++              <div className="sources-block">
++                <h4>Sources</h4>
++                <ul>
++                  {selected.sources.map((s, i) => (
++                    <li key={i}>
++                      <a href={api.catalogueUrl(s.productId)} target="_blank" rel="noreferrer">
++                        {s.type === 'catalogue' ? s.label : `Excerpt from ${s.productId} datasheet`}
++                      </a>
++                      <span className="source-type-chip">internal catalogue</span>
++                    </li>
++                  ))}
++                </ul>
++              </div>
++            )}
++
+             {p.has_catalogue ? (
+               <a className="catalogue-card" href={api.catalogueUrl(p.id)} target="_blank" rel="noreferrer">
+                 <span className="catalogue-icon">📄</span>
+@@ -147,10 +276,10 @@ export default function MatchingPage() {
+ 
+           <div className="match-alternatives panel">
+             <h4>Other matches</h4>
+-            {enquiry.results.slice(0, 6).map((r, i) => (
++            {item.results.slice(0, 6).map((r, i) => (
+               <div
+                 key={r.product.id}
+-                className={`alt-row ${i === enquiry.selectedIndex ? 'alt-row-selected' : ''}`}
++                className={`alt-row ${i === (item.selectedIndex ?? 0) ? 'alt-row-selected' : ''}`}
+                 onClick={() => selectAlternative(i)}
+               >
+                 <div>
+@@ -164,11 +293,12 @@ export default function MatchingPage() {
+             ))}
+           </div>
+         </div>
++        )}
+ 
+         <div className="match-footer">
+           <button className="secondary-btn" onClick={handleReset}>Reset</button>
+           <button className="secondary-btn" onClick={handleEdit}>Edit</button>
+-          <button className="primary-btn" onClick={handleProceed}>Proceed with Offer Generation</button>
++          <button className="primary-btn" onClick={handleProceed} disabled={!hasResults}>Proceed with Offer Generation</button>
+         </div>
+       </div>
+     </div>
+diff --git a/web/src/pages/OfferPage.jsx b/web/src/pages/OfferPage.jsx
+index 52dec1e..f107a68 100644
+--- a/web/src/pages/OfferPage.jsx
++++ b/web/src/pages/OfferPage.jsx
+@@ -31,7 +31,11 @@ export default function OfferPage() {
+   const [manualValues, setManualValues] = useState({});
+   const [docxError, setDocxError] = useState(null);
+ 
+-  const p0 = enquiry?.results?.[enquiry.selectedIndex]?.product;
++  // Offer generation always targets whichever single enquiry item the user
++  // was viewing on the matching page (enquiry.items can hold several, one
++  // per product enquiry found in the source document).
++  const currentItem = enquiry?.items?.[enquiry.selectedItemIndex ?? 0];
++  const p0 = currentItem?.results?.[currentItem.selectedIndex ?? 0]?.product;
+ 
+   useEffect(() => {
+     if (!p0) return;
+@@ -46,7 +50,7 @@ export default function OfferPage() {
+       .catch(() => setTemplateStatus('none'));
+   }, [p0?.id]);
+ 
+-  if (!enquiry || !enquiry.results?.length) {
++  if (!enquiry || !currentItem?.results?.length) {
+     return (
+       <div className="chat-shell">
+         <TopBar title="Offer" />
+@@ -58,7 +62,7 @@ export default function OfferPage() {
+     );
+   }
+ 
+-  const selected = enquiry.results[enquiry.selectedIndex];
++  const selected = currentItem.results[currentItem.selectedIndex ?? 0];
+   const p = selected.product;
+   const current = offer || DEFAULT_OFFER;
+   const offerRef = `OFR-${p.id}-${new Date().getFullYear()}-${String(current.version).padStart(2, '0')}`;

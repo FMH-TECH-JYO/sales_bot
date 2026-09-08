@@ -41,7 +41,21 @@ async function extractProductDraft(rawText, categoryLabel = null) {
     output_type: crossValidateOutput(data.output_type, pre),
     connection: data.connection ? 0.5 : 0.2,
     industries: data.industries && data.industries.length ? 0.6 : 0.2,
+    extra_specs: (data.extra_specs && data.extra_specs.length) ? 0.5 : 0.2,
   };
+
+  // "Label: Value" strings -> {label, value} pairs, for product_extra_spec.
+  // Dropped (not silently kept malformed) if a line doesn't have the colon —
+  // better to lose one attribute than store garbage the admin didn't see.
+  const extraSpecs = (data.extra_specs || [])
+    .map((line) => {
+      const idx = String(line).indexOf(':');
+      if (idx < 0) return null;
+      const label = line.slice(0, idx).trim();
+      const value = line.slice(idx + 1).trim();
+      return label && value ? { label, value } : null;
+    })
+    .filter(Boolean);
 
   return {
     extracted: {
@@ -57,6 +71,7 @@ async function extractProductDraft(rawText, categoryLabel = null) {
       hazardous: data.hazardous,
       connection: data.connection || null,
       industries: data.industries || [],
+      extra_specs: extraSpecs,
     },
     confidence,
     provider: `local-ollama-${model}`,

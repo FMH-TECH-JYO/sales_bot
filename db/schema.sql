@@ -29,9 +29,19 @@ CREATE TABLE products (
   hazardous         TEXT NOT NULL,        -- 'safe' | 'flameproof' | 'both'
   connection        TEXT,
   no_code           BOOLEAN DEFAULT FALSE,-- true if no catalogue order code exists (see products_seed.json)
+  datasheet_text    TEXT,                  -- full parsed text of the CURRENT published datasheet PDF, copied from
+                                            -- catalogue_uploads.raw_text at publish time. Used ONLY for internal
+                                            -- full-text retrieval (matchEnquiry.js) when a spec the enquiry asked
+                                            -- about isn't in any of the structured columns/extra specs above —
+                                            -- never sent whole to the LLM, never used for anything customer-facing.
   created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+-- Postgres built-in full-text search (no extension required) over each
+-- product's own datasheet text — this is the "internal catalogue RAG"
+-- retrieval path, deliberately NOT vector/embedding-based so it needs
+-- nothing beyond stock Postgres.
+CREATE INDEX idx_products_datasheet_fts ON products USING GIN (to_tsvector('english', coalesce(datasheet_text, '')));
 -- NOTE: two temp_switch entries in products_seed.json have model:'—' (no dedicated code).
 -- Assign them synthetic ids at seed time, e.g. 'TEMP-SW-WEATHERPROOF' / 'TEMP-SW-FLAMEPROOF'.
 
@@ -135,8 +145,10 @@ CREATE TABLE enquiries (
   uploaded_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 -- Valid stage values (enforce in application layer or CHECK constraint):
---   'new' -> 'extracted' -> 'reviewed' -> 'matched' -> 'offer_drafted' -> 'offer_sent' -> 'won' | 'lost' | 'no_response'
---   'abandoned' reachable from any stage
+--   'new' -> 'extracted' -> 'reviewed' -> 'matched' -> 'offer_drafted' -> 'offer_sent'
+-- 'offer_sent' is the last tracked stage — this app doesn't track what
+-- happens to an enquiry after the offer is generated/downloaded (no
+-- won/lost outcome). 'abandoned' is reachable from any stage before that.
 
 CREATE TABLE enquiry_stage_history (
   id            SERIAL PRIMARY KEY,
@@ -188,11 +200,8 @@ CREATE TABLE offers (
   version       INTEGER NOT NULL DEFAULT 1,
   customer_json JSONB,                    -- snapshot of customer details at offer time
   terms_json    JSONB,                    -- payment terms, validity, delivery
-  status        TEXT NOT NULL DEFAULT 'draft',  -- 'draft' | 'sent' | 'won' | 'lost'
+  status        TEXT NOT NULL DEFAULT 'draft',  -- 'draft' | 'generated' — nothing past this is tracked
   pdf_url       TEXT,
-  won_at        TIMESTAMP,
-  lost_at       TIMESTAMP,
-  lost_reason   TEXT,
   created_by    INTEGER REFERENCES users(id),
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -222,23 +231,6 @@ CREATE TABLE audit_log (
 -- workflow. This is what lets a new product be added by uploading a PDF and
 -- publishing it, with no code change or redeploy.
 -- ---------------------------------------------------------------------------
--- ---------------------------------------------------------------------------
--- FILE STORAGE (db-backed) — the actual bytes for anything uploaded through
--- storage/index.js (catalogue PDFs, enquiry files) live HERE, not on local
--- disk. This is what makes uploads travel with the database: clone the repo
--- on a different machine, point it at the same DATABASE_URL, and every
--- catalogue file that was ever published is already there — no separate
--- file sync step, no missing files because someone's local `server/uploads/`
--- folder (gitignored) never left their machine.
--- See server/src/storage/dbStorage.js.
--- ---------------------------------------------------------------------------
-CREATE TABLE stored_files (
-  key                TEXT PRIMARY KEY,   -- sha256(content)+ext, same key scheme as the old local-disk driver
-  data               BYTEA NOT NULL,     -- SQLite: BLOB
-  mime_type          TEXT,
-  original_filename  TEXT,
-  uploaded_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
 CREATE TABLE catalogue_uploads (
   id                 SERIAL PRIMARY KEY,

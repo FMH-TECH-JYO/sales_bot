@@ -1,6 +1,12 @@
 node_modules/
 .env
-server/uploads/*
-!server/uploads/.gitkeep
 *.log
 .DS_Store
+
+# server/uploads/ (admin-uploaded catalogue PDFs) is INTENTIONALLY committed,
+# not ignored — see db/exportCatalogue.js / db/importCatalogue.js. This is a
+# single-server internal tool without shared/cloud storage, so the actual
+# catalogue files travel with the repo the same way the catalogue DATABASE
+# rows do (via the export/import scripts) — otherwise a `git pull` on
+# another machine has product records with no matching datasheet file, or a
+# fresh Postgres with no catalogue at all. See DEPLOY.md.

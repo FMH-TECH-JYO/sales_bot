@@ -8,8 +8,10 @@
     "web"
   ],
   "scripts": {
-    "db:migrate": "node db/migrate.js",
+    "db:migrate": "psql \"$DATABASE_URL\" -f db/schema.sql",
     "db:seed": "node db/seed.js",
+    "db:export-catalogue": "node db/exportCatalogue.js",
+    "db:import-catalogue": "node db/importCatalogue.js",
     "dev:server": "npm run dev --workspace=server"
   },
   "dependencies": {

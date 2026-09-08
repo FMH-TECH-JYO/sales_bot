@@ -16,15 +16,6 @@ const STATUS_COLORS = {
 const OUTPUT_OPTIONS = ['switch', '4-20mA', 'hart', 'modbus', 'visual'];
 const HAZARDOUS_OPTIONS = ['safe', 'flameproof', 'both'];
 
-const STATUS_FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'uploaded', label: 'Uploaded' },
-  { key: 'drafted', label: 'Drafted awaiting review' },
-  { key: 'in_review', label: 'In review' },
-  { key: 'published', label: 'Published' },
-  { key: 'rejected', label: 'Rejected' },
-];
-
 function StatusBadge({ status }) {
   return (
     <span
@@ -153,23 +144,10 @@ function UploadPanel({ categories, onUploaded, onCategoryCreated }) {
 // ---------------------------------------------------------------------------
 // Uploads table
 // ---------------------------------------------------------------------------
-function UploadsTable({ uploads, selectedId, onSelect, statusCounts, statusFilter, onStatusFilterChange }) {
+function UploadsTable({ uploads, selectedId, onSelect }) {
   return (
     <div className="panel">
-      <div className="admin-filter-row">
-        <h2 style={{ margin: 0 }}>Catalogue uploads ({statusCounts.total ?? uploads.length})</h2>
-      </div>
-      <div className="admin-filter-chips" style={{ marginBottom: 12 }}>
-        {STATUS_FILTERS.map((f) => (
-          <button
-            key={f.key}
-            className={`chip-btn ${statusFilter === f.key ? 'chip-btn-active' : ''}`}
-            onClick={() => onStatusFilterChange(f.key)}
-          >
-            {f.label}{f.key !== 'all' ? ` (${statusCounts.byStatus?.[f.key] || 0})` : ''}
-          </button>
-        ))}
-      </div>
+      <h2>Catalogue uploads ({uploads.length})</h2>
       <table>
         <thead>
           <tr>
@@ -210,9 +188,28 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
   const [upload, setUpload] = useState(null);
   const [form, setForm] = useState(null);
   const [industriesText, setIndustriesText] = useState('');
+  const [extraSpecsText, setExtraSpecsText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [categoryOverride, setCategoryOverride] = useState('');
+
+  // Extra specs are the family-specific attributes that don't have a fixed
+  // column (RTD wiring, switch differential, level measurement principle,
+  // indicator power type, etc.) — edited here as one "Label: Value" per
+  // line, same shape the AI draft produces, so the reviewer can add/fix
+  // whatever's specific to THIS product family before publishing.
+  function extraSpecsToText(specs) {
+    return (specs || []).map((s) => `${s.label}: ${s.value}`).join('\n');
+  }
+  function textToExtraSpecs(text) {
+    return text.split('\n').map((line) => {
+      const idx = line.indexOf(':');
+      if (idx < 0) return null;
+      const label = line.slice(0, idx).trim();
+      const value = line.slice(idx + 1).trim();
+      return label && value ? { label, value } : null;
+    }).filter(Boolean);
+  }
 
   const load = useCallback(async () => {
     if (!uploadId) return;
@@ -221,10 +218,11 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
     setForm(
       data.extracted_json || {
         id: '', model: '', family: '', blurb: '', val_min: '', val_max: '', temp_max: '',
-        accuracy: '', output_type: 'switch', hazardous: 'safe', connection: '', industries: [],
+        accuracy: '', output_type: 'switch', hazardous: 'safe', connection: '', industries: [], extra_specs: [],
       }
     );
     setIndustriesText((data.extracted_json?.industries || []).join(', '));
+    setExtraSpecsText(extraSpecsToText(data.extracted_json?.extra_specs));
     setCategoryOverride(data.category_id || '');
     setError(null);
   }, [uploadId]);
@@ -256,6 +254,7 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
       setUpload(updated);
       setForm(updated.extracted_json);
       setIndustriesText((updated.extracted_json?.industries || []).join(', '));
+      setExtraSpecsText(extraSpecsToText(updated.extracted_json?.extra_specs));
       onChanged();
     } catch (e) {
       setError(e.message);
@@ -274,6 +273,7 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
         val_max: form.val_max === '' ? null : Number(form.val_max),
         temp_max: form.temp_max === '' ? null : Number(form.temp_max),
         industries: industriesText.split(',').map((s) => s.trim()).filter(Boolean),
+        extra_specs: textToExtraSpecs(extraSpecsText),
       };
       const updated = await api.updateDraft(uploadId, { category_id: categoryOverride || null, extracted_json: payload });
       setUpload(updated);
@@ -396,6 +396,18 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
           <label><ConfidenceDot value={confidence.industries} /> Industries (comma-separated)</label>
           <input value={industriesText} onChange={(e) => setIndustriesText(e.target.value)} />
         </div>
+        <div className="field-row full">
+          <label><ConfidenceDot value={confidence.extra_specs} /> Extra specs — one per line, "Label: Value"</label>
+          <textarea
+            value={extraSpecsText}
+            onChange={(e) => setExtraSpecsText(e.target.value)}
+            rows={4}
+            placeholder={'Wiring: 3-wire\nElement: Pt100 Class B\nDifferential: adjustable, 10-20% of range'}
+          />
+          <p className="hint" style={{ marginTop: 2 }}>
+            Whatever matters for THIS product family and isn't one of the fixed fields above — matching uses these too.
+          </p>
+        </div>
       </div>
 
       {error && <div className="error-box">{error}</div>}
@@ -419,13 +431,10 @@ export default function CatalogueManager() {
   const [categories, setCategories] = useState([]);
   const [uploads, setUploads] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [statusCounts, setStatusCounts] = useState({ total: 0, byStatus: {} });
 
   const refreshUploads = useCallback(() => {
-    api.getUploads(statusFilter === 'all' ? null : statusFilter).then(setUploads).catch(console.error);
-    api.getUploadStatusCounts().then(setStatusCounts).catch(console.error);
-  }, [statusFilter]);
+    api.getUploads().then(setUploads).catch(console.error);
+  }, []);
 
   useEffect(() => {
     api.getCategories().then(setCategories).catch(console.error);
@@ -449,14 +458,7 @@ export default function CatalogueManager() {
       />
 
       <div className="split">
-        <UploadsTable
-          uploads={uploads}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          statusCounts={statusCounts}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-        />
+        <UploadsTable uploads={uploads} selectedId={selectedId} onSelect={setSelectedId} />
         <ReviewPanel uploadId={selectedId} categories={categories} onChanged={refreshUploads} />
       </div>
       </div>

@@ -43,6 +43,11 @@ const productDraftSchema = {
       items: { type: 'string' },
       description: 'Industries/applications listed in the text, as short labels',
     },
+    extra_specs: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Any OTHER technical attribute stated in the text that matters for selecting this product but has no dedicated field above — the exact attribute varies by product family (e.g. for an RTD: "Wiring: 3-wire", "Element: Pt100 Class B"; for a switch: "Differential: adjustable, 10-20% of range", "Contact rating: 5A @ 250VAC"; for a level instrument: "Measurement principle: guided wave radar"; for an indicator: "Power: loop-powered, no external supply needed", "Display: 4-digit LCD"). Each entry MUST be formatted exactly as "Label: Value", one attribute per entry, using only what the text actually states. Leave empty if the text has nothing beyond the fixed fields above.',
+    },
   },
   required: ['family', 'blurb', 'output_type', 'hazardous'],
 };

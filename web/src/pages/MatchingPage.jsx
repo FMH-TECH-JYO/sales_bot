@@ -132,6 +132,20 @@ export default function MatchingPage() {
 
         {item.warning && <div className="error-box">{item.warning}</div>}
 
+        {item.clarificationsNeeded?.length > 0 && (
+          <div className="clarify-block panel">
+            <h4>🔎 Information needed to finalize the exact model</h4>
+            <p className="hint" style={{ marginTop: -4 }}>
+              The enquiry didn't specify these, and the top candidates differ on them — ask the customer before committing to one model.
+            </p>
+            <ul>
+              {item.clarificationsNeeded.map((c, i) => (
+                <li key={i}><strong>{c.parameter}</strong> — candidates offer: {c.candidateValues.join(' vs. ')}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {!hasResults ? (
           <div className="panel empty-state" style={{ padding: 30 }}>
             <p>No candidate products found for this enquiry.</p>
@@ -170,6 +184,9 @@ export default function MatchingPage() {
                   <li>Output: {p.output_type}</li>
                   <li>Accuracy: {p.accuracy || '—'}</li>
                   <li>Connection: {p.connection || '—'}</li>
+                  {(p.extra_specs || []).map((s, i) => (
+                    <li key={i}>{s.label}: {s.value}</li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -207,21 +224,18 @@ export default function MatchingPage() {
               </div>
             )}
 
-            {selected.webFindings?.length > 0 && (
+            {selected.datasheetFindings?.length > 0 && (
               <div className="match-list match-list-good">
-                <h4>🌐 Found via internet lookup</h4>
+                <h4>📄 Found in the published datasheet</h4>
                 <ul>
-                  {selected.webFindings.map((f, i) => (
+                  {selected.datasheetFindings.map((f, i) => (
                     <li key={i}>
                       <strong>{f.spec}:</strong> {f.value}{' '}
-                      <a href={f.source.url} target="_blank" rel="noreferrer" className="source-link">[source]</a>
+                      <span className="hint">— "{f.source.excerpt}"</span>
                     </li>
                   ))}
                 </ul>
               </div>
-            )}
-            {selected.webLookupNote && (
-              <p className="hint" style={{ marginTop: 4 }}>{selected.webLookupNote}</p>
             )}
 
             {selected.sources?.length > 0 && (
@@ -230,12 +244,10 @@ export default function MatchingPage() {
                 <ul>
                   {selected.sources.map((s, i) => (
                     <li key={i}>
-                      {s.type === 'catalogue' ? (
-                        <a href={api.catalogueUrl(s.productId)} target="_blank" rel="noreferrer">{s.label}</a>
-                      ) : (
-                        <a href={s.url} target="_blank" rel="noreferrer">{s.title || s.url}</a>
-                      )}
-                      <span className="source-type-chip">{s.type === 'catalogue' ? 'internal catalogue' : 'web'}</span>
+                      <a href={api.catalogueUrl(s.productId)} target="_blank" rel="noreferrer">
+                        {s.type === 'catalogue' ? s.label : `Excerpt from ${s.productId} datasheet`}
+                      </a>
+                      <span className="source-type-chip">internal catalogue</span>
                     </li>
                   ))}
                 </ul>

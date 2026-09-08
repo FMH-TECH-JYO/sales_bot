@@ -39,19 +39,34 @@
     {
       "id": "pressure_gauge",
       "label": "Pressure gauge (Bourdon, dial)"
+    },
+    {
+      "id": "temperature_gauge",
+      "label": "Temperature gauge (dial thermometer)"
+    },
+    {
+      "id": "rtd",
+      "label": "RTD temperature sensor (bare element / assembly)"
+    },
+    {
+      "id": "indicator",
+      "label": "Process indicator (loop/local powered display)"
     }
   ],
   "units": {
     "pressure_switch": "bar",
     "dp_switch": "bar",
-    "temp_switch": "\u00b0C",
+    "temp_switch": "°C",
     "level_switch": "mm (insertion/probe)",
     "level_gauge": "mm (C-C distance)",
     "pressure_transmitter": "bar",
     "smart_pressure_transmitter": "bar",
     "smart_dp_transmitter": "bar",
-    "temp_transmitter": "\u00b0C",
-    "pressure_gauge": "bar"
+    "temp_transmitter": "°C",
+    "pressure_gauge": "bar",
+    "temperature_gauge": "°C",
+    "rtd": "°C",
+    "indicator": "mA / display units"
   },
   "microswitch_table": [
     [
@@ -106,7 +121,7 @@
       "valMin": -0.2,
       "valMax": 250,
       "tempMax": 130,
-      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S. (\u00b13% F.S. typical above 40 bar, piston)",
+      "accuracy": "Scale ±1% F.S.; repeatability ±0.5% F.S. (±3% F.S. typical above 40 bar, piston)",
       "output": "switch",
       "hazardous": "safe",
       "connection": "1/4\" NPT(F) standard; 3/8\"/1/2\" NPT or BSP, size/type selectable",
@@ -136,8 +151,8 @@
         "Optional extras": "Calibration test certificate; material test certificate; SS304 tag plate; wall-mounting plate; 2\" pipe U-clamp mounting"
       },
       "orderCode": {
-        "skeleton": "WP\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
-        "example": "WP1AAF1AA11-0000 = direct bottom mount, 1/4\" NPT(M), 0.1\u20131 kg/cm\u00b2 dual scale w/ bar, 1 SPDT general purpose 5-15A/250VAC, 3/4\" ET single comp. gland, SS316 sensor, SS316 wetted parts"
+        "skeleton": "WP–Mounting–ConnSize–ConnType–Range–Units–Microswitch–CableEntry–SensorMOC–WettedMOC–Optionals",
+        "example": "WP1AAF1AA11-0000 = direct bottom mount, 1/4\" NPT(M), 0.1–1 kg/cm² dual scale w/ bar, 1 SPDT general purpose 5-15A/250VAC, 3/4\" ET single comp. gland, SS316 sensor, SS316 wetted parts"
       },
       "codeTable": [
         {
@@ -217,7 +232,7 @@
           "name": "Range",
           "options": [
             [
-              "\u2014",
+              "—",
               "See range table below"
             ]
           ]
@@ -241,7 +256,7 @@
           "name": "Microswitch",
           "options": [
             [
-              "\u2014",
+              "—",
               "See microswitch table below"
             ]
           ]
@@ -321,8 +336,8 @@
           "name": "Optional features",
           "options": [
             [
-              "\u2014",
-              "Calibration cert. / material cert. / SS304 tag plate / wall-mount plate / 2\" pipe U-clamp \u2014 state which, else 0000"
+              "—",
+              "Calibration cert. / material cert. / SS304 tag plate / wall-mount plate / 2\" pipe U-clamp — state which, else 0000"
             ]
           ]
         }
@@ -357,89 +372,89 @@
           ],
           [
             "F",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.1 to 1"
           ],
           [
             "G",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.2 to 2"
           ],
           [
             "H",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.3 to 3"
           ],
           [
             "I",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.4 to 4"
           ],
           [
             "J",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.5 to 5"
           ],
           [
             "K",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.6 to 6"
           ],
           [
             "L",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.7 to 7"
           ],
           [
             "M",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "1 to 10"
           ],
           [
             "N",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "1.6 to 16"
           ],
           [
             "O",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "2.5 to 25"
           ],
           [
             "P",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "4 to 40"
           ],
           [
             "Q",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "6 to 60"
           ],
           [
             "R",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "10 to 100"
           ],
           [
             "S",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "16 to 160"
           ],
           [
             "T",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "25 to 220"
           ],
           [
             "U",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "50 to 300"
           ]
         ],
-        "note": "Ranges above 40 bar are manufactured with a piston as sensor automatically \u2014 no separate code needed. WP does not offer the vacuum codes (V\u2013Y) that FP does."
+        "note": "Ranges above 40 bar are manufactured with a piston as sensor automatically — no separate code needed. WP does not offer the vacuum codes (V–Y) that FP does."
       },
       "deviations": [
-        "The individual WP datasheet lists a single PG13.5 cable gland, 1 SPDT switch only, and ambient rating \u221210\u202660\u00b0C. The general Pressure Switch mailer describes a broader \"Weatherproof Low/High Pressure Switch\" family with 2SPDT/DPDT options, multiple cable-entry types (ET/NPT/DIN/4-pin/7-pin) and ambient rating \u221220\u202665\u00b0C. These are believed to be the same ordering-code family shown at two levels of detail, but the ambient-temperature figures do not match between the two source documents \u2014 confirm the exact ambient rating for the configuration you are quoting."
+        "The individual WP datasheet lists a single PG13.5 cable gland, 1 SPDT switch only, and ambient rating −10…60°C. The general Pressure Switch mailer describes a broader \"Weatherproof Low/High Pressure Switch\" family with 2SPDT/DPDT options, multiple cable-entry types (ET/NPT/DIN/4-pin/7-pin) and ambient rating −20…65°C. These are believed to be the same ordering-code family shown at two levels of detail, but the ambient-temperature figures do not match between the two source documents — confirm the exact ambient rating for the configuration you are quoting."
       ]
     },
     {
@@ -450,7 +465,7 @@
       "valMin": -1,
       "valMax": 250,
       "tempMax": 130,
-      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S. (\u00b13% F.S. typical above 40 bar, piston)",
+      "accuracy": "Scale ±1% F.S.; repeatability ±0.5% F.S. (±3% F.S. typical above 40 bar, piston)",
       "output": "switch",
       "hazardous": "flameproof",
       "connection": "1/4\" NPT(F), double compression cable gland",
@@ -477,8 +492,8 @@
         "Optional extras": "Calibration/material test certificate; enclosure protection to Gr. IIA/IIB or Gr. IIC; SS304 tag plate; wall/pipe mounting"
       },
       "orderCode": {
-        "skeleton": "FP\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
-        "example": "FP1AAM1AE11-0000 = direct bottom, 1/4\" NPT(M), 1\u201310 kg/cm\u00b2 dual scale, 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor, SS316 wetted parts"
+        "skeleton": "FP–Mounting–ConnSize–ConnType–Range–Units–Microswitch–CableEntry–SensorMOC–WettedMOC–Optionals",
+        "example": "FP1AAM1AE11-0000 = direct bottom, 1/4\" NPT(M), 1–10 kg/cm² dual scale, 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor, SS316 wetted parts"
       },
       "codeTable": [
         {
@@ -558,8 +573,8 @@
           "name": "Range",
           "options": [
             [
-              "\u2014",
-              "See range table below (includes vacuum codes V\u2013Y)"
+              "—",
+              "See range table below (includes vacuum codes V–Y)"
             ]
           ]
         },
@@ -582,7 +597,7 @@
           "name": "Microswitch",
           "options": [
             [
-              "\u2014",
+              "—",
               "See microswitch table below"
             ]
           ]
@@ -650,7 +665,7 @@
           "name": "Optional features",
           "options": [
             [
-              "\u2014",
+              "—",
               "Calibration/material cert. / Gr.IIA,IIB or Gr.IIC enclosure protection / SS304 tag plate / wall or pipe mounting"
             ]
           ]
@@ -686,109 +701,109 @@
           ],
           [
             "F",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.1 to 1"
           ],
           [
             "G",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.2 to 2"
           ],
           [
             "H",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.3 to 3"
           ],
           [
             "I",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.4 to 4"
           ],
           [
             "J",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.5 to 5"
           ],
           [
             "K",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.6 to 6"
           ],
           [
             "L",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.7 to 7"
           ],
           [
             "M",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "1 to 10"
           ],
           [
             "N",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "1.6 to 16"
           ],
           [
             "O",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "2.5 to 25"
           ],
           [
             "P",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "4 to 40"
           ],
           [
             "Q",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "6 to 60"
           ],
           [
             "R",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "10 to 100"
           ],
           [
             "S",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "16 to 160"
           ],
           [
             "T",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "25 to 220"
           ],
           [
             "U",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "50 to 300"
           ],
           [
             "V",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "-1 to +1"
           ],
           [
             "W",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "-1 to +2"
           ],
           [
             "X",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "-1 to +3"
           ],
           [
             "Y",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "-1 to +4"
           ]
         ],
-        "note": "FP additionally offers vacuum-compound ranges V\u2013Y, not available on WP. Ranges above 40 bar use a piston sensor automatically."
+        "note": "FP additionally offers vacuum-compound ranges V–Y, not available on WP. Ranges above 40 bar use a piston sensor automatically."
       },
       "deviations": [
-        "Same base-datasheet-vs-mailer ambient-temperature discrepancy as WP (\u221210\u202660\u00b0C individual sheet vs \u221220\u202665\u00b0C mailer) \u2014 confirm before quoting."
+        "Same base-datasheet-vs-mailer ambient-temperature discrepancy as WP (−10…60°C individual sheet vs −20…65°C mailer) — confirm before quoting."
       ]
     },
     {
@@ -799,7 +814,7 @@
       "valMin": 0.003,
       "valMax": 25,
       "tempMax": 130,
-      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S.",
+      "accuracy": "Scale ±1% F.S.; repeatability ±0.5% F.S.",
       "output": "switch",
       "hazardous": "safe",
       "connection": "1/4\" NPT(F), HP/LP bottom ports",
@@ -823,8 +838,8 @@
         "Sensor / wetted material options": "SS316 (standard) / Monel / Hastelloy C / Teflon backup (sensor); SS316 / Monel / Hastelloy C (wetted parts)"
       },
       "orderCode": {
-        "skeleton": "WD\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
-        "example": "WD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2\u20132 kg/cm\u00b2 dual scale w/ bar, 1 SPDT general purpose, 3/4\" ET single comp. gland, SS316 sensor/wetted parts"
+        "skeleton": "WD–Mounting–ConnSize–ConnType–Range–Units–Microswitch–CableEntry–SensorMOC–WettedMOC–Optionals",
+        "example": "WD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2–2 kg/cm² dual scale w/ bar, 1 SPDT general purpose, 3/4\" ET single comp. gland, SS316 sensor/wetted parts"
       },
       "codeTable": [
         {
@@ -904,7 +919,7 @@
           "name": "Range",
           "options": [
             [
-              "\u2014",
+              "—",
               "See range table below"
             ]
           ]
@@ -928,7 +943,7 @@
           "name": "Microswitch",
           "options": [
             [
-              "\u2014",
+              "—",
               "See microswitch table below"
             ]
           ]
@@ -1008,7 +1023,7 @@
           "name": "Optional features",
           "options": [
             [
-              "\u2014",
+              "—",
               "Calibration/material cert. / SS304 tag plate / wall-mount plate / 2\" pipe U-clamp"
             ]
           ]
@@ -1044,38 +1059,38 @@
           ],
           [
             "G",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.2 to 2"
           ],
           [
             "I",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.4 to 4"
           ],
           [
             "K",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.6 to 6"
           ],
           [
             "M",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "1 to 10"
           ],
           [
             "N",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "1.6 to 16"
           ],
           [
             "O",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "2.5 to 25"
           ]
         ]
       },
       "deviations": [
-        "Individual WD datasheet: ambient \u221210\u202660\u00b0C, PG13.5 gland only. Mailer \"Weatherproof Differential Pressure Switch\": range quoted as 0.1\u201325 bar, ambient \u221220\u202665\u00b0C, wider cable-entry choice. Same discrepancy pattern as WP \u2014 confirm ambient rating for the exact configuration."
+        "Individual WD datasheet: ambient −10…60°C, PG13.5 gland only. Mailer \"Weatherproof Differential Pressure Switch\": range quoted as 0.1–25 bar, ambient −20…65°C, wider cable-entry choice. Same discrepancy pattern as WP — confirm ambient rating for the exact configuration."
       ]
     },
     {
@@ -1086,7 +1101,7 @@
       "valMin": 0.003,
       "valMax": 25,
       "tempMax": 130,
-      "accuracy": "Scale \u00b11% F.S.; repeatability \u00b10.5% F.S.",
+      "accuracy": "Scale ±1% F.S.; repeatability ±0.5% F.S.",
       "output": "switch",
       "hazardous": "flameproof",
       "connection": "1/4\" NPT(F), double compression cable gland",
@@ -1109,8 +1124,8 @@
         "Sensor / wetted material options": "SS316 (standard) / Monel / Hastelloy C / Teflon backup (sensor); SS316 / Monel / Hastelloy C (wetted parts)"
       },
       "orderCode": {
-        "skeleton": "FD\u2013Mounting\u2013ConnSize\u2013ConnType\u2013Range\u2013Units\u2013Microswitch\u2013CableEntry\u2013SensorMOC\u2013WettedMOC\u2013Optionals",
-        "example": "FD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2\u20132 kg/cm\u00b2, 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor/wetted parts"
+        "skeleton": "FD–Mounting–ConnSize–ConnType–Range–Units–Microswitch–CableEntry–SensorMOC–WettedMOC–Optionals",
+        "example": "FD1AAG1AA11-0000 = direct bottom, 1/4\" NPT(M), 0.2–2 kg/cm², 1 SPDT general purpose, 3/4\" ET double comp. gland, SS316 sensor/wetted parts"
       },
       "codeTable": [
         {
@@ -1190,7 +1205,7 @@
           "name": "Range",
           "options": [
             [
-              "\u2014",
+              "—",
               "See range table below"
             ]
           ]
@@ -1214,7 +1229,7 @@
           "name": "Microswitch",
           "options": [
             [
-              "\u2014",
+              "—",
               "See microswitch table below"
             ]
           ]
@@ -1282,7 +1297,7 @@
           "name": "Optional features",
           "options": [
             [
-              "\u2014",
+              "—",
               "Calibration/material cert. / Gr.IIA,IIB or Gr.IIC enclosure protection / SS304 tag plate / wall or pipe mounting"
             ]
           ]
@@ -1318,32 +1333,32 @@
           ],
           [
             "G",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.2 to 2"
           ],
           [
             "I",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.4 to 4"
           ],
           [
             "K",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "0.6 to 6"
           ],
           [
             "M",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "1 to 10"
           ],
           [
             "N",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "1.6 to 16"
           ],
           [
             "O",
-            "kg/cm\u00b2 & bar",
+            "kg/cm² & bar",
             "2.5 to 25"
           ]
         ]
@@ -1353,15 +1368,15 @@
       ]
     },
     {
-      "model": "\u2014",
+      "model": "—",
       "family": "Weatherproof Temperature Switch",
       "category": "temp_switch",
       "noCode": true,
-      "blurb": "Gas-filled capillary temperature switch, safe-area, adjustable set point, up to 5 m armoured capillary. Only documented in the general Pressure Switch mailer \u2014 no dedicated datasheet or model code supplied.",
+      "blurb": "Gas-filled capillary temperature switch, safe-area, adjustable set point, up to 5 m armoured capillary. Only documented in the general Pressure Switch mailer — no dedicated datasheet or model code supplied.",
       "valMin": 10,
       "valMax": 300,
       "tempMax": 300,
-      "accuracy": "\u00b13% F.S.",
+      "accuracy": "±3% F.S.",
       "output": "switch",
       "hazardous": "safe",
       "connection": "Fixed/adjustable 3/8\" or 1/2\" BSP or NPT",
@@ -1387,19 +1402,19 @@
       "codeTable": null,
       "rangeTable": null,
       "deviations": [
-        "No dedicated datasheet or segmented order code was supplied for this product \u2014 everything here is transcribed from the general Pressure Switch mailer only. Treat range/accuracy figures as indicative until confirmed by the factory."
+        "No dedicated datasheet or segmented order code was supplied for this product — everything here is transcribed from the general Pressure Switch mailer only. Treat range/accuracy figures as indicative until confirmed by the factory."
       ]
     },
     {
-      "model": "\u2014",
+      "model": "—",
       "family": "Flame/Explosion Proof Temperature Switch",
       "category": "temp_switch",
       "noCode": true,
-      "blurb": "Ex d IIA/IIB/IIC hazardous-area version of the capillary temperature switch. Only documented in the general mailer \u2014 no dedicated datasheet or model code supplied.",
+      "blurb": "Ex d IIA/IIB/IIC hazardous-area version of the capillary temperature switch. Only documented in the general mailer — no dedicated datasheet or model code supplied.",
       "valMin": 10,
       "valMax": 300,
       "tempMax": 300,
-      "accuracy": "\u00b13% F.S.",
+      "accuracy": "±3% F.S.",
       "output": "switch",
       "hazardous": "flameproof",
       "connection": "Fixed/adjustable 3/8\" or 1/2\" BSP or NPT",
@@ -1422,7 +1437,7 @@
       "codeTable": null,
       "rangeTable": null,
       "deviations": [
-        "Same caveat as the weatherproof version \u2014 mailer-only source, no dedicated datasheet or code table supplied."
+        "Same caveat as the weatherproof version — mailer-only source, no dedicated datasheet or code table supplied."
       ]
     },
     {
@@ -1433,10 +1448,10 @@
       "valMin": 300,
       "valMax": 3000,
       "tempMax": 100,
-      "accuracy": "Switching differential fixed 10\u00b15 mm",
+      "accuracy": "Switching differential fixed 10±5 mm",
       "output": "switch",
       "hazardous": "both",
-      "connection": "Flanged (92 mm PCD round/square/forged, or 1\"\u20133\" RF 150#/300#) or 1\" NPT/BSP(M)",
+      "connection": "Flanged (92 mm PCD round/square/forged, or 1\"–3\" RF 150#/300#) or 1\" NPT/BSP(M)",
       "industries": [
         "Power plants",
         "Chemical industries",
@@ -1455,7 +1470,7 @@
         "Min. specific gravity": "0.7"
       },
       "orderCode": {
-        "skeleton": "LT\u2013ProcessConn\u2013ProbeLength\u2013ReedSwitch\u2013SetPoints\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
+        "skeleton": "LT–ProcessConn–ProbeLength–ReedSwitch–SetPoints–CableEntry–FloatDim–Enclosure–MOC / Optionals",
         "example": "LTBA11E111-0000 = 92mm PCD sq. flange, 300 mm probe, 1 SPST, 1 set point, PG13.5 single gland, 28 mm float, weatherproof, SS316"
       },
       "codeTable": [
@@ -1684,7 +1699,7 @@
               "PVDF"
             ],
             [
-              "\u2014",
+              "—",
               "Optional: calibration/material test cert. 3.1, SS304 or SS316 tag plate"
             ]
           ]
@@ -1697,11 +1712,11 @@
       "model": "LS",
       "family": "Side-Mounted Level Switch (standard)",
       "category": "level_switch",
-      "blurb": "Side-entry float switch for a single high/low point, up to 120\u00b0C standard duty.",
+      "blurb": "Side-entry float switch for a single high/low point, up to 120°C standard duty.",
       "valMin": 180,
       "valMax": 180,
       "tempMax": 120,
-      "accuracy": "Differential fixed 3\u201330 mm (max); adjustable 40\u2013250 mm (optional)",
+      "accuracy": "Differential fixed 3–30 mm (max); adjustable 40–250 mm (optional)",
       "output": "switch",
       "hazardous": "both",
       "connection": "Flanged (92 mm PCD) or 1\" NPT/BSP(M)",
@@ -1724,7 +1739,7 @@
         "Min. insertion depth": "180 mm"
       },
       "orderCode": {
-        "skeleton": "LS\u2013ProcessConn\u2013Microswitch\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
+        "skeleton": "LS–ProcessConn–Microswitch–CableEntry–FloatDim–Enclosure–MOC / Optionals",
         "example": "LSB1E111-0000 = 92mm PCD sq. flange, 2 SPDT general purpose, PG13.5 single gland, 50/120 float, weatherproof LM24, SS316"
       },
       "codeTable": [
@@ -1734,7 +1749,7 @@
           "options": [
             [
               "LS",
-              "Side-mounted level switch (standard, \u2264120\u00b0C)"
+              "Side-mounted level switch (standard, ≤120°C)"
             ]
           ]
         },
@@ -1873,7 +1888,7 @@
               "PVDF"
             ],
             [
-              "\u2014",
+              "—",
               "Optional: calibration/material test cert. 3.1 (standard), SS304 or SS316 tag plate"
             ]
           ]
@@ -1881,18 +1896,18 @@
       ],
       "rangeTable": null,
       "deviations": [
-        "Listed separately from the high-temperature \"LH\" variant below \u2014 do not use this entry for duty above 120\u00b0C."
+        "Listed separately from the high-temperature \"LH\" variant below — do not use this entry for duty above 120°C."
       ]
     },
     {
       "model": "LH",
       "family": "Side-Mounted Level Switch (high-temperature)",
       "category": "level_switch",
-      "blurb": "Same LS body, rated for high-temperature service up to 350\u00b0C (optional max) \u2014 order code prefix LH instead of LS, same segment structure.",
+      "blurb": "Same LS body, rated for high-temperature service up to 350°C (optional max) — order code prefix LH instead of LS, same segment structure.",
       "valMin": 180,
       "valMax": 180,
       "tempMax": 350,
-      "accuracy": "Differential fixed 3\u201330 mm (max); adjustable 40\u2013250 mm (optional)",
+      "accuracy": "Differential fixed 3–30 mm (max); adjustable 40–250 mm (optional)",
       "output": "switch",
       "hazardous": "both",
       "connection": "Flanged (92 mm PCD) or 1\" NPT/BSP(M)",
@@ -1912,7 +1927,7 @@
         "Min. insertion depth": "180 mm"
       },
       "orderCode": {
-        "skeleton": "LH\u2013ProcessConn\u2013Microswitch\u2013CableEntry\u2013FloatDim\u2013Enclosure\u2013MOC / Optionals",
+        "skeleton": "LH–ProcessConn–Microswitch–CableEntry–FloatDim–Enclosure–MOC / Optionals",
         "example": "Same segment pattern and codes as LS (see LS code table), with LH model prefix"
       },
       "codeTable": [
@@ -1922,7 +1937,7 @@
           "options": [
             [
               "LH",
-              "Side-mounted level switch (high-temperature, to 350\u00b0C optional max)"
+              "Side-mounted level switch (high-temperature, to 350°C optional max)"
             ]
           ]
         },
@@ -1931,8 +1946,8 @@
           "name": "Process connection",
           "options": [
             [
-              "\u2014",
-              "Same options as LS \u2014 see LS code table"
+              "—",
+              "Same options as LS — see LS code table"
             ]
           ]
         },
@@ -1941,7 +1956,7 @@
           "name": "Microswitch",
           "options": [
             [
-              "\u2014",
+              "—",
               "Same options as LS"
             ]
           ]
@@ -1951,7 +1966,7 @@
           "name": "Cable entry",
           "options": [
             [
-              "\u2014",
+              "—",
               "Same options as LS"
             ]
           ]
@@ -1961,7 +1976,7 @@
           "name": "Float dimension",
           "options": [
             [
-              "\u2014",
+              "—",
               "Same options as LS"
             ]
           ]
@@ -1971,7 +1986,7 @@
           "name": "Enclosure",
           "options": [
             [
-              "\u2014",
+              "—",
               "Same options as LS"
             ]
           ]
@@ -1981,7 +1996,7 @@
           "name": "Float/stem/connection MOC + optionals",
           "options": [
             [
-              "\u2014",
+              "—",
               "Same options as LS"
             ]
           ]
@@ -1989,7 +2004,7 @@
       ],
       "rangeTable": null,
       "deviations": [
-        "The 350\u00b0C figure is described in the datasheet as an \"optional max\" for the high-temperature mode \u2014 confirm the exact continuous rating required with the factory before quoting."
+        "The 350°C figure is described in the datasheet as an \"optional max\" for the high-temperature mode — confirm the exact continuous rating required with the factory before quoting."
       ]
     },
     {
@@ -2003,7 +2018,7 @@
       "accuracy": "Visibility = C-C minus 150 mm",
       "output": "visual",
       "hazardous": "safe",
-      "connection": "Flanged or screwed, up to 15 kg/cm\u00b2",
+      "connection": "Flanged or screwed, up to 15 kg/cm²",
       "industries": [
         "Chemical/process industry",
         "Marine/shipping (tank gauging)",
@@ -2021,7 +2036,7 @@
         "Glass": "Heavy-walled borosilicate, H-19/16 Teflon packing"
       },
       "orderCode": {
-        "skeleton": "FMLG-TB\u2013Mounting\u2013BodyMaterial\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013ScaleMaterial\u2013CtoC / Options",
+        "skeleton": "FMLG-TB–Mounting–BodyMaterial–ProcessConn–TopVent–BottomDrain–ScaleMaterial–CtoC / Options",
         "example": "FMLG-TB-SD-4S-F501-V1-V2-AL-L0800 = side mount, SS304 channel, 1/2\" 150# RF flange, 800 mm C-C"
       },
       "codeTable": [
@@ -2184,10 +2199,10 @@
       "valMin": 0,
       "valMax": 6000,
       "tempMax": 400,
-      "accuracy": "\u00b110 mm measuring error",
+      "accuracy": "±10 mm measuring error",
       "output": "visual",
       "hazardous": "safe",
-      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm\u00b2",
+      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm²",
       "industries": [
         "Chemical processing (hazardous reactors)",
         "Fertilizer (ammonia storage)",
@@ -2204,8 +2219,8 @@
         "Wetted parts": "AISI 316 SS or 316L SS"
       },
       "orderCode": {
-        "skeleton": "FMLG-MG\u2013Mounting\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013Drain\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
-        "example": "FMLG-MG-SD-SS-T1-P3-V4-D1-F501-L1000-AL-RW-2-2 = side mount, SS316, 0-50 kg/cm\u00b2, 1000 mm C-C, 2 Ex-proof switches"
+        "skeleton": "FMLG-MG–Mounting–WettedParts–TempRange–PressRange–Vent–Drain–ProcessConn–CtoC–Scale–FlagColour–Switches–SwitchHousing",
+        "example": "FMLG-MG-SD-SS-T1-P3-V4-D1-F501-L1000-AL-RW-2-2 = side mount, SS316, 0-50 kg/cm², 1000 mm C-C, 2 Ex-proof switches"
       },
       "codeTable": [
         {
@@ -2242,11 +2257,11 @@
           "options": [
             [
               "T1",
-              "-20 to 120\u00b0C"
+              "-20 to 120°C"
             ],
             [
               "T2",
-              "-20 to 400\u00b0C (with cooling fins)"
+              "-20 to 400°C (with cooling fins)"
             ]
           ]
         },
@@ -2256,15 +2271,15 @@
           "options": [
             [
               "P1",
-              "0-10 kg/cm\u00b2"
+              "0-10 kg/cm²"
             ],
             [
               "P2",
-              "0-25 kg/cm\u00b2"
+              "0-25 kg/cm²"
             ],
             [
               "P3",
-              "0-50 kg/cm\u00b2"
+              "0-50 kg/cm²"
             ]
           ]
         },
@@ -2419,14 +2434,14 @@
       "model": "FMLG-BM",
       "family": "Bi-Colour Magnetic Level Indicator",
       "category": "level_gauge",
-      "blurb": "Bypass gauge with bi-colour flag to distinguish liquid from vapour at a glance; up to 400\u00b0C. Indicator body is not itself Ex-certified; optional Ex-proof switch accessory available.",
+      "blurb": "Bypass gauge with bi-colour flag to distinguish liquid from vapour at a glance; up to 400°C. Indicator body is not itself Ex-certified; optional Ex-proof switch accessory available.",
       "valMin": 0,
       "valMax": 6000,
       "tempMax": 400,
-      "accuracy": "\u00b110 mm measuring error",
+      "accuracy": "±10 mm measuring error",
       "output": "visual",
       "hazardous": "safe",
-      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm\u00b2",
+      "connection": "Weld end or flanged (DIN/ANSI), up to 50 kg/cm²",
       "industries": [
         "Petrochemical/refining (distillation columns)",
         "Oil & gas / LPG (pressurised storage)",
@@ -2442,7 +2457,7 @@
         "Wetted parts": "AISI 316 SS or 316L SS"
       },
       "orderCode": {
-        "skeleton": "FMLG-BM\u2013Mounting\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013Drain\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
+        "skeleton": "FMLG-BM–Mounting–WettedParts–TempRange–PressRange–Vent–Drain–ProcessConn–CtoC–Scale–FlagColour–Switches–SwitchHousing",
         "example": "FMLG-BM-TP-SL-T2-P2-V6-D2-F103-L2000-4S-BW-1-1 = top mount, SS316L, 2000 mm C-C"
       },
       "codeTable": [
@@ -2480,11 +2495,11 @@
           "options": [
             [
               "T1",
-              "-20 to 120\u00b0C"
+              "-20 to 120°C"
             ],
             [
               "T2",
-              "-20 to 400\u00b0C"
+              "-20 to 400°C"
             ]
           ]
         },
@@ -2494,15 +2509,15 @@
           "options": [
             [
               "P1",
-              "0-10 kg/cm\u00b2"
+              "0-10 kg/cm²"
             ],
             [
               "P2",
-              "0-25 kg/cm\u00b2"
+              "0-25 kg/cm²"
             ],
             [
               "P3",
-              "0-50 kg/cm\u00b2"
+              "0-50 kg/cm²"
             ]
           ]
         },
@@ -2637,10 +2652,10 @@
       "valMin": 0,
       "valMax": 6000,
       "tempMax": 400,
-      "accuracy": "\u00b110 mm measuring error",
+      "accuracy": "±10 mm measuring error",
       "output": "visual",
       "hazardous": "safe",
-      "connection": "Flanged, top mount only, up to 50 kg/cm\u00b2",
+      "connection": "Flanged, top mount only, up to 50 kg/cm²",
       "industries": [
         "Hazardous/chemical waste pits",
         "Effluent/neutralisation sumps",
@@ -2656,7 +2671,7 @@
         "Wetted parts": "AISI 316 SS or 316L SS"
       },
       "orderCode": {
-        "skeleton": "FMLG-TM\u2013WettedParts\u2013TempRange\u2013PressRange\u2013Vent\u2013ProcessConn\u2013CtoC\u2013Scale\u2013FlagColour\u2013Switches\u2013SwitchHousing",
+        "skeleton": "FMLG-TM–WettedParts–TempRange–PressRange–Vent–ProcessConn–CtoC–Scale–FlagColour–Switches–SwitchHousing",
         "example": "FMLG-TM-SS-T1-P1-V6-F501-L1500-AL-KW-1-1 = SS316, 1500 mm C-C, top mount only"
       },
       "codeTable": [
@@ -2680,11 +2695,11 @@
           "options": [
             [
               "T1",
-              "-20 to 120\u00b0C"
+              "-20 to 120°C"
             ],
             [
               "T2",
-              "-20 to 400\u00b0C"
+              "-20 to 400°C"
             ]
           ]
         },
@@ -2694,15 +2709,15 @@
           "options": [
             [
               "P1",
-              "0-10 kg/cm\u00b2"
+              "0-10 kg/cm²"
             ],
             [
               "P2",
-              "0-25 kg/cm\u00b2"
+              "0-25 kg/cm²"
             ],
             [
               "P3",
-              "0-50 kg/cm\u00b2"
+              "0-50 kg/cm²"
             ]
           ]
         },
@@ -2823,10 +2838,10 @@
       "valMin": 0,
       "valMax": 6000,
       "tempMax": 300,
-      "accuracy": "\u00b12 mm",
+      "accuracy": "±2 mm",
       "output": "visual",
       "hazardous": "both",
-      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm\u00b2 classes",
+      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm² classes",
       "industries": [
         "Power generation (steam boiler drums)",
         "Petrochemical (water/hydrocarbon reactors)",
@@ -2843,7 +2858,7 @@
         "Body material options": "CS / ASTM A-105 / SS304 / SS316 / PP (CS reinforced)"
       },
       "orderCode": {
-        "skeleton": "FMLG-RF\u2013BodyMaterial\u2013TubeGuard\u2013Gasket\u2013ValveBonnet\u2013ConnOrientation\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013Scale\u2013CtoC / Options",
+        "skeleton": "FMLG-RF–BodyMaterial–TubeGuard–Gasket–ValveBonnet–ConnOrientation–ProcessConn–TopVent–BottomDrain–Scale–CtoC / Options",
         "example": "FMLG-RF-T-T-G5-B3-OR-F501-PN1-PN1-AL-L0800-BV = SS316, bolted bonnet, 800 mm C-C"
       },
       "codeTable": [
@@ -2915,15 +2930,15 @@
           "options": [
             [
               "B1",
-              "Screwed bonnet, max 85 kg/cm\u00b2"
+              "Screwed bonnet, max 85 kg/cm²"
             ],
             [
               "B2",
-              "Union bonnet, max 165 kg/cm\u00b2"
+              "Union bonnet, max 165 kg/cm²"
             ],
             [
               "B3",
-              "Bolted bonnet, max 210 kg/cm\u00b2"
+              "Bolted bonnet, max 210 kg/cm²"
             ]
           ]
         },
@@ -3002,7 +3017,7 @@
           "name": "Bottom side drain",
           "options": [
             [
-              "\u2014",
+              "—",
               "Same options as top vent"
             ]
           ]
@@ -3052,10 +3067,10 @@
       "valMin": 0,
       "valMax": 6000,
       "tempMax": 300,
-      "accuracy": "\u00b12 mm",
+      "accuracy": "±2 mm",
       "output": "visual",
       "hazardous": "both",
-      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm\u00b2 classes",
+      "connection": "Side mount, flanged/screwed; 30/65/100 kg/cm² classes",
       "industries": [
         "Chemical processing (interface tracking)",
         "Fertilizer/agrochemical (colour-change batching)",
@@ -3068,10 +3083,10 @@
         "dirty liquid"
       ],
       "extraSpec": {
-        "Sight glass options": "Borosilicate (max 20kg/cm\u00b2, 120\u00b0C) / Ilmadur / Klinger"
+        "Sight glass options": "Borosilicate (max 20kg/cm², 120°C) / Ilmadur / Klinger"
       },
       "orderCode": {
-        "skeleton": "FMLG-TP\u2013BodyMaterial\u2013CoverMaterial\u2013SightGlass\u2013Gasket\u2013ValveBonnet\u2013ConnOrientation\u2013ProcessConn\u2013TopVent\u2013BottomDrain\u2013Scale\u2013CtoC / Options",
+        "skeleton": "FMLG-TP–BodyMaterial–CoverMaterial–SightGlass–Gasket–ValveBonnet–ConnOrientation–ProcessConn–TopVent–BottomDrain–Scale–CtoC / Options",
         "example": "FMLG-TP-6T-6T-BO-PT-B3-OR-F501-PN1-PN1-AL-L0800-IW = SS316, borosilicate glass, illuminated"
       },
       "codeTable": [
@@ -3117,7 +3132,7 @@
           "options": [
             [
               "BO",
-              "Borosilicate (max 20 kg/cm\u00b2, 120\u00b0C)"
+              "Borosilicate (max 20 kg/cm², 120°C)"
             ],
             [
               "IL",
@@ -3153,15 +3168,15 @@
           "options": [
             [
               "B1",
-              "Screwed, max 85 kg/cm\u00b2"
+              "Screwed, max 85 kg/cm²"
             ],
             [
               "B2",
-              "Union, max 165 kg/cm\u00b2"
+              "Union, max 165 kg/cm²"
             ],
             [
               "B3",
-              "Bolted, max 210 kg/cm\u00b2"
+              "Bolted, max 210 kg/cm²"
             ]
           ]
         },
@@ -3232,7 +3247,7 @@
           "name": "Bottom side drain",
           "options": [
             [
-              "\u2014",
+              "—",
               "Same options as top vent"
             ]
           ]
@@ -3294,14 +3309,14 @@
       "model": "FMLG-WP",
       "family": "Welded Pad Type Level Indicator",
       "category": "level_gauge",
-      "blurb": "Welds directly onto the vessel wall \u2014 used where piping-induced thermal error or space constraints rule out a remote gauge.",
+      "blurb": "Welds directly onto the vessel wall — used where piping-induced thermal error or space constraints rule out a remote gauge.",
       "valMin": 0,
       "valMax": 6000,
       "tempMax": 240,
       "accuracy": "Per gauge classification table (body/gasket combination)",
       "output": "visual",
       "hazardous": "safe",
-      "connection": "Direct weld-on, flat or contoured; up to 40 kg/cm\u00b2 (SS)",
+      "connection": "Direct weld-on, flat or contoured; up to 40 kg/cm² (SS)",
       "industries": [
         "Specialty chemicals (crystallization reactors)",
         "Chemical processing (agitated mixing vessels)",
@@ -3314,10 +3329,10 @@
         "no piping"
       ],
       "extraSpec": {
-        "Sight glass options": "Borosilicate (max 10kg/cm\u00b2,120\u00b0C) / Ilmadur (max 20,120\u00b0C) / Klinger (max 40,240\u00b0C)"
+        "Sight glass options": "Borosilicate (max 10kg/cm²,120°C) / Ilmadur (max 20,120°C) / Klinger (max 40,240°C)"
       },
       "orderCode": {
-        "skeleton": "FMLG-WP\u2013ProcessConn(Welded)\u2013BodyMaterial\u2013RetainerCap\u2013SightGlass\u2013Gasket\u2013ORing\u2013Bolts\u2013Length/Sections",
+        "skeleton": "FMLG-WP–ProcessConn(Welded)–BodyMaterial–RetainerCap–SightGlass–Gasket–ORing–Bolts–Length/Sections",
         "example": "FMLG-WP-W-6T-6T-KL-TF-VT-SS-L1200-1 = SS316, Klinger glass, 1200 mm, single section"
       },
       "codeTable": [
@@ -3365,15 +3380,15 @@
           "options": [
             [
               "BO",
-              "Borosilicate, max 10kg/cm\u00b2, 120\u00b0C"
+              "Borosilicate, max 10kg/cm², 120°C"
             ],
             [
               "IL",
-              "Ilmadur, max 20kg/cm\u00b2, 120\u00b0C"
+              "Ilmadur, max 20kg/cm², 120°C"
             ],
             [
               "KL",
-              "Klinger, max 40kg/cm\u00b2, 240\u00b0C"
+              "Klinger, max 40kg/cm², 240°C"
             ]
           ]
         },
@@ -3498,7 +3513,7 @@
       "orderCode": null,
       "codeTable": null,
       "deviations": [
-        "No segmented order code published \u2014 order by stating range, output signal, process connection, electrical connector and housing size directly. Datasheet cross-referenced against source reference \"PT124B/G-210\"; confirm exact connector/output combination availability with the factory."
+        "No segmented order code published — order by stating range, output signal, process connection, electrical connector and housing size directly. Datasheet cross-referenced against source reference \"PT124B/G-210\"; confirm exact connector/output combination availability with the factory."
       ]
     },
     {
@@ -3539,7 +3554,7 @@
       "model": "FMPT-412",
       "family": "Flush Diaphragm Pressure Transmitter",
       "category": "pressure_transmitter",
-      "blurb": "Flush-face diaphragm avoids port clogging \u2014 for viscous, slurry or particulate-laden media, hermetically welded wetted parts.",
+      "blurb": "Flush-face diaphragm avoids port clogging — for viscous, slurry or particulate-laden media, hermetically welded wetted parts.",
       "valMin": 0,
       "valMax": 700,
       "tempMax": 85,
@@ -3643,7 +3658,7 @@
       "model": "FMPT-812",
       "family": "High-Temperature Pressure Transmitter (cooling element)",
       "category": "pressure_transmitter",
-      "blurb": "Integrated cooling element permits medium temperatures up to 150\u00b0C at the sensor.",
+      "blurb": "Integrated cooling element permits medium temperatures up to 150°C at the sensor.",
       "valMin": -1,
       "valMax": 1000,
       "tempMax": 150,
@@ -3679,7 +3694,7 @@
       "valMin": -1,
       "valMax": 400,
       "tempMax": 85,
-      "accuracy": "GP \u00b10.075% to \u00b10.2% URL; AP \u00b10.1% to \u00b10.2% URL",
+      "accuracy": "GP ±0.075% to ±0.2% URL; AP ±0.1% to ±0.2% URL",
       "output": "hart",
       "hazardous": "safe",
       "connection": "M20x1.5, G1/2, G1/4, 1/2/1/4 NPT + adapters",
@@ -3701,7 +3716,7 @@
         "Certification": "Contact Forbes Marshall for current hazardous-area/regulatory approval status (none listed as standard)"
       },
       "orderCode": {
-        "skeleton": "FMPT-6000\u2013GP/AP\u2013[Range+Diaphragm+Fill+Seal]\u2013CableOutlet\u2013[Signal+Display]\u2013ProcessConn / Options",
+        "skeleton": "FMPT-6000–GP/AP–[Range+Diaphragm+Fill+Seal]–CableOutlet–[Signal+Display]–ProcessConn / Options",
         "example": "FMPT-6000-GP-S105GSSF-R2-HC-M01/B7 = 0-10 bar gauge, SS316L, silicone fill, HART + LCD, M20, U-bracket"
       },
       "codeTable": [
@@ -3864,7 +3879,7 @@
       "valMin": -1,
       "valMax": 400,
       "tempMax": 85,
-      "accuracy": "GP \u00b10.075% to \u00b10.1% URL; AP \u00b10.1% to \u00b10.2% URL",
+      "accuracy": "GP ±0.075% to ±0.1% URL; AP ±0.1% to ±0.2% URL",
       "output": "hart",
       "hazardous": "both",
       "connection": "M20x1.5, G1/2, 1/2/1/4 NPT, flanged options",
@@ -3886,7 +3901,7 @@
         "Wetted parts": "316L / HC-276 (Hastelloy) / Tantalum / Ceramic (for AP 0.1-0.2 bar)"
       },
       "orderCode": {
-        "skeleton": "FMPT-7000\u2013GP/AP\u2013[HazArea+Output+Case+Connector+Display]\u2013[Range+Sensor+Wetted+Fill+Bolting+Mount+Conn] / Options",
+        "skeleton": "FMPT-7000–GP/AP–[HazArea+Output+Case+Connector+Display]–[Range+Sensor+Wetted+Fill+Bolting+Mount+Conn] / Options",
         "example": "FMPT-7000-GP-0HS1L-4TAMS/G7/Y3 = 0-10 bar gauge, non-hazardous, HART + LCD, 3-year warranty"
       },
       "codeTable": [
@@ -4138,7 +4153,7 @@
         }
       ],
       "deviations": [
-        "Datasheet notes \"some certifications are in process\" \u2014 confirm current certificate status/copies with Forbes Marshall before quoting a hazardous-area or marine job."
+        "Datasheet notes \"some certifications are in process\" — confirm current certificate status/copies with Forbes Marshall before quoting a hazardous-area or marine job."
       ]
     },
     {
@@ -4149,7 +4164,7 @@
       "valMin": 0.06,
       "valMax": 100,
       "tempMax": 85,
-      "accuracy": "\u00b10.075% to \u00b10.2% URL (TD dependent)",
+      "accuracy": "±0.075% to ±0.2% URL (TD dependent)",
       "output": "hart",
       "hazardous": "safe",
       "connection": "1/4-18 NPT(F), drain/vent options",
@@ -4172,7 +4187,7 @@
         "Fill options": "Silicone oil / inert filler"
       },
       "orderCode": {
-        "skeleton": "FMDPT-6000\u2013DP\u2013[Range+Diaphragm+Fill+Seal]\u2013CableOutlet\u2013[Signal+Display]\u2013ProcessConn / Options",
+        "skeleton": "FMDPT-6000–DP–[Range+Diaphragm+Fill+Seal]–CableOutlet–[Signal+Display]–ProcessConn / Options",
         "example": "FMDPT-6000-DP-S105DSSN-R2-HC-H1/B6 = 0-10 bar DP, SS316L, HART + LCD"
       },
       "codeTable": [
@@ -4325,7 +4340,7 @@
       "valMin": 0.02,
       "valMax": 100,
       "tempMax": 85,
-      "accuracy": "\u00b10.05% (opt.) to \u00b10.075% URL at TD\u22645",
+      "accuracy": "±0.05% (opt.) to ±0.075% URL at TD≤5",
       "output": "hart",
       "hazardous": "both",
       "connection": "1/4-18 NPT(F), integrated valve manifold option",
@@ -4347,7 +4362,7 @@
         "Diaphragm options": "316L / HC-276 (Hastelloy) / Tantalum (all extended lead time except 316L)"
       },
       "orderCode": {
-        "skeleton": "FMDPT-7000\u2013[HazArea+Output+Case+Connector+Display+Range+Sensor+Wetted+Oil+Bolting+Mount+Conn] / Options",
+        "skeleton": "FMDPT-7000–[HazArea+Output+Case+Connector+Display+Range+Sensor+Wetted+Oil+Bolting+Mount+Conn] / Options",
         "example": "FMDPT-7000-0HS1L-1A1S6H/G1 = 0-50 mbar, non-hazardous, HART + LCD"
       },
       "codeTable": [
@@ -4613,7 +4628,7 @@
         }
       ],
       "deviations": [
-        "Datasheet notes \"some certifications are in process\" \u2014 confirm current certificate status with Forbes Marshall before quoting."
+        "Datasheet notes \"some certifications are in process\" — confirm current certificate status with Forbes Marshall before quoting."
       ]
     },
     {
@@ -4624,7 +4639,7 @@
       "valMin": -200,
       "valMax": 1800,
       "tempMax": 80,
-      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
+      "accuracy": "RTD ±0.1% F.S.; TC ±0.2% F.S.",
       "output": "4-20mA",
       "hazardous": "safe",
       "connection": "Head-mount, Form-B compatible, M4x2 screws",
@@ -4645,13 +4660,13 @@
       ],
       "extraSpec": {
         "Sensor types": "RTD Pt100; TC K/J/S/R/N",
-        "CJC range/accuracy": "\u221240 to +80\u00b0C, \u00b11\u00b0C",
+        "CJC range/accuracy": "−40 to +80°C, ±1°C",
         "Sensor-break output": "21 mA"
       },
       "orderCode": null,
       "codeTable": null,
       "deviations": [
-        "No segmented order code published \u2014 order by stating sensor type, calibrated range, output and mounting directly."
+        "No segmented order code published — order by stating sensor type, calibrated range, output and mounting directly."
       ]
     },
     {
@@ -4662,7 +4677,7 @@
       "valMin": -200,
       "valMax": 1800,
       "tempMax": 80,
-      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
+      "accuracy": "RTD ±0.1% F.S.; TC ±0.2% F.S.",
       "output": "4-20mA",
       "hazardous": "safe",
       "connection": "Head-mount, Form-B compatible, M4x2 screws",
@@ -4681,7 +4696,7 @@
       ],
       "extraSpec": {
         "Sensor types": "RTD Pt100/Cu50/Cu100 (Pt1000/WRe custom); TC K/J/S/R/N",
-        "CJC range/accuracy": "\u221240 to +80\u00b0C, \u00b11\u00b0C",
+        "CJC range/accuracy": "−40 to +80°C, ±1°C",
         "Input-break output": "21 mA"
       },
       "orderCode": null,
@@ -4694,11 +4709,11 @@
       "model": "FMTT-712",
       "family": "HART Smart Head Mount Temperature Transmitter",
       "category": "temp_transmitter",
-      "blurb": "Universal RTD/TC/resistance/voltage input, HART 7, 1500VAC isolation \u2014 drop-in replacement for Rosemount 248.",
+      "blurb": "Universal RTD/TC/resistance/voltage input, HART 7, 1500VAC isolation — drop-in replacement for Rosemount 248.",
       "valMin": -200,
       "valMax": 2300,
       "tempMax": 80,
-      "accuracy": "RTD \u00b10.1% F.S.; TC \u00b10.2% F.S.",
+      "accuracy": "RTD ±0.1% F.S.; TC ±0.2% F.S.",
       "output": "hart",
       "hazardous": "safe",
       "connection": "DIN B / Form-B head mount, M3x2 screws",
@@ -4717,7 +4732,7 @@
         "Rosemount replacement"
       ],
       "extraSpec": {
-        "Sensor types": "RTD Pt100/Pt1000/Cu100/Cu50; TC K/E/S/B/J/T/R/N/WRe5/WRe3; resistance 0-4000\u03a9; voltage \u00b1800mV",
+        "Sensor types": "RTD Pt100/Pt1000/Cu100/Cu50; TC K/E/S/B/J/T/R/N/WRe5/WRe3; resistance 0-4000Ω; voltage ±800mV",
         "Compatible configurators": "Rosemount 275, 375 and other mainstream field configurators",
         "Sensor-break output": "20.8 mA"
       },

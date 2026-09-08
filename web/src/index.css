@@ -277,6 +277,11 @@ tr.row-selected { background: var(--fm-blue-10); }
 .rva-status.rva-missing { color: var(--fm-danger); }
 .rva-status.rva-not_requested { color: var(--sub); font-weight: 500; }
 
+/* --- Clarifications needed (info-gap) --- */
+.clarify-block { background: var(--fm-blue-5); border-color: var(--fm-blue-20); margin-bottom: 16px; }
+.clarify-block h4 { margin: 0 0 4px; font-size: 13px; color: var(--navy); }
+.clarify-block ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.8; }
+
 /* --- Sources --- */
 .sources-block { margin: 14px 0; padding: 10px 14px; border-radius: 8px; background: var(--fm-blue-5); border: 1px solid var(--line); }
 .sources-block h4 { margin: 0 0 6px; font-size: 12.5px; text-transform: uppercase; color: var(--steel); }

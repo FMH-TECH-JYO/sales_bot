@@ -14,11 +14,19 @@
 //      scored, reasoned match. INTERNAL CATALOGUES ARE ALWAYS THE FIRST AND
 //      PRIMARY SOURCE.
 //   3. Only for specs the enquiry explicitly asked about that NO candidate's
-//      catalogue data confirms either way, an optional web lookup
-//      (webLookup.js) is attempted — grounded strictly in retrieved
-//      snippets, never the model's own trained knowledge. If web lookup is
-//      unavailable or turns up nothing, the spec is reported as missing,
-//      never guessed.
+//      structured fields OR extra specs confirm, internalDatasheetLookup.js
+//      searches that SAME candidate's own published datasheet TEXT (via
+//      Postgres full-text search — no internet, no vector DB) and, if
+//      found, extracts it via an LLM call strictly grounded in that
+//      excerpt. If nothing is found there either, the spec is reported as
+//      missing, never guessed. Internal data only, always — this app never
+//      calls out to the internet.
+//   4. Separately, computeClarificationsNeeded() flags parameters the
+//      ENQUIRY itself left unstated where the top candidates still
+//      genuinely differ — i.e. exactly the information a sales engineer
+//      would need to ask the customer for before the match can be
+//      finalized to one specific model, not just "the catalogue doesn't
+//      say."
 //
 // A single document (Excel/PDF/typed text) can describe MULTIPLE product
 // enquiries. matchEnquiries() splits it (enquiryFileParser.js for
@@ -34,7 +42,8 @@ const { extractStructured } = require('./llmClient');
 const { parseEnquiryText, detectCategory } = require('./parseEnquiryText');
 const { parseEnquiryFile, isExcelMime, isPdfMime } = require('./enquiryFileParser');
 const { splitEnquiryText } = require('./splitEnquiries');
-const webLookup = require('./webLookup');
+const { classifyCategory } = require('./categoryClassifier');
+const { lookupSpecInDatasheet } = require('./internalDatasheetLookup');
 
 const matchSchema = {
   type: 'object',
@@ -60,12 +69,12 @@ const matchSchema = {
 };
 
 const SYSTEM_PROMPT = `You are a Forbes Marshall sales engineer matching a customer enquiry to the correct instrument model.
-You will be given the enquiry text and a JSON list of candidate products from the SAME family (e.g. all pressure transmitters), each with its real datasheet specs. This candidate list is the ONLY source of truth about the products — it comes directly from Forbes Marshall's published catalogue.
-Score EVERY candidate 0-100 on how well it satisfies the enquiry: range coverage, hazardous area, output type (HART/4-20mA/switch/modbus), max temperature, accuracy, and process connection where stated.
+You will be given the enquiry text and a JSON list of candidate products from the SAME family (e.g. all pressure transmitters, or all RTDs, or all process indicators), each with its real datasheet specs. This candidate list is the ONLY source of truth about the products — it comes directly from Forbes Marshall's published catalogue.
+Score EVERY candidate 0-100 on how well it satisfies the enquiry, using WHICHEVER of the following the candidate JSON actually has values for: range coverage, hazardous area, output type (HART/4-20mA/switch/modbus/visual), max temperature, accuracy, process connection, and the "extra_specs" list — this last one is where family-specific attributes live (e.g. an RTD's wiring/element type, a switch's differential/contact rating, a level instrument's measurement principle, an indicator's power/display type). Treat extra_specs entries with the same weight as the fixed fields when the enquiry mentions that attribute.
 A product whose range is far wider than requested is workable but not a perfect fit — prefer a snug match over an oversized one, and note it as a deviation, not a missing spec.
-Never invent a product id that is not in the candidate list. Never invent, guess, or round a numeric spec value that is not present in the candidate JSON — if a candidate's field is null/absent, treat that attribute as unconfirmed (missing_specs), not as a value you can supply yourself.
+Never invent a product id that is not in the candidate list. Never invent, guess, or round a numeric spec value that is not present in the candidate JSON — if a candidate's field is null/absent and doesn't appear in its extra_specs either, treat that attribute as unconfirmed (missing_specs), not as a value you can supply yourself.
 If nothing fits well, still return your best-ranked candidates rather than an empty list.
-IMPORTANT — deviations must never be left empty when percent < 100: for every attribute where the product's actual spec differs from, or goes beyond, what the enquiry stated, add one short phrase to deviations (e.g. "Range 0-6000mm is far wider than requested", "No HART, output is visual only"). If the enquiry simply didn't state a value for something the product datasheet does specify, put that in missing_specs instead (e.g. "Accuracy not stated by customer — product is ±1% FS"), not deviations. Only use a low percent AND leave deviations sparse when the enquiry itself is too vague to compare against (e.g. contains no technical detail at all) — in that case say so plainly in reason.`;
+IMPORTANT — deviations must never be left empty when percent < 100: for every attribute where the product's actual spec differs from, or goes beyond, what the enquiry stated, add one short phrase to deviations (e.g. "Range 0-6000mm is far wider than requested", "No HART, output is visual only", "3-wire only, enquiry asked for 4-wire"). If the enquiry simply didn't state a value for something the product datasheet does specify, put that in missing_specs instead (e.g. "Accuracy not stated by customer — product is ±1% FS"), not deviations. Only use a low percent AND leave deviations sparse when the enquiry itself is too vague to compare against (e.g. contains no technical detail at all) — in that case say so plainly in reason.`;
 
 function buildCandidateSummary(products) {
   return products.map((p) => ({
@@ -79,6 +88,7 @@ function buildCandidateSummary(products) {
     hazardous: p.hazardous,
     connection: p.connection,
     blurb: p.blurb,
+    extra_specs: (p.extra_specs || []).map((s) => `${s.label}: ${s.value}`),
   }));
 }
 
@@ -177,49 +187,98 @@ function buildRequestedVsActual(parsed, product) {
 
 /**
  * For missing_specs the LLM flagged (an enquiry-stated requirement no
- * candidate's catalogue entry confirms), try the internet — strictly
- * grounded, strictly optional. Never called for anything the catalogue
- * already answered.
+ * candidate's structured fields OR extra_specs confirm), search that SAME
+ * candidate's own published datasheet TEXT — internal only, no internet.
+ * Never called for anything the structured data already answered.
  */
-async function enrichMissingSpecsWithWeb(result, categoryLabel) {
+async function enrichMissingSpecsFromDatasheet(result, categoryLabel) {
   const sources = [];
-  if (!result.missingSpecs || result.missingSpecs.length === 0) {
-    return { webFindings: [], sources };
-  }
-  if (!webLookup.isEnabled()) {
-    return {
-      webFindings: [],
-      sources,
-      webLookupNote: 'Internet lookup is not configured (no WEB_SEARCH_PROVIDER/API key set) — these fields are reported as missing rather than guessed.',
-    };
+  if (!result.missingSpecs || result.missingSpecs.length === 0 || !result.product.has_catalogue) {
+    return { datasheetFindings: [], sources };
   }
 
-  const webFindings = [];
+  const datasheetFindings = [];
   for (const spec of result.missingSpecs) {
     const question = `For the Forbes Marshall ${result.product.model} (${categoryLabel || result.product.family}): ${spec}`;
     try {
-      const found = await webLookup.lookupSpec(question);
+      const found = await lookupSpecInDatasheet(result.product.id, question);
       if (found.found && found.value && found.source) {
-        webFindings.push({ spec, value: found.value, source: found.source });
-        sources.push({ type: 'web', url: found.source.url, title: found.source.title });
+        datasheetFindings.push({ spec, value: found.value, source: found.source });
+        sources.push({ type: 'catalogue_excerpt', productId: found.source.productId, excerpt: found.source.excerpt });
       }
     } catch (err) {
-      console.error('Web enrichment failed for spec:', spec, err.message);
+      console.error('Datasheet enrichment failed for spec:', spec, err.message);
     }
   }
-  return { webFindings, sources };
+  return { datasheetFindings, sources };
+}
+
+/**
+ * Flags parameters the ENQUIRY itself left unstated where the top
+ * candidates still genuinely disagree — i.e. information a sales engineer
+ * needs from the customer before the match can be narrowed to one exact
+ * model, as distinct from missingSpecs (which is about the CATALOGUE
+ * lacking data). Purely deterministic: compares real candidate values,
+ * flags a gap only when they actually differ. Never invents a value or a
+ * question — if every top candidate agrees, there's nothing to ask.
+ */
+function computeClarificationsNeeded(parsed, results) {
+  const top = results.slice(0, 3).filter((r) => r.product);
+  if (top.length < 2) return [];
+
+  const rawTextLower = (parsed.rawText || '').toLowerCase();
+  const clarifications = [];
+
+  const fixedDims = [
+    { label: 'Area classification (safe / flameproof / both)', specified: !!parsed.hazardous, get: (p) => p.hazardous },
+    { label: 'Output type', specified: parsed.outputCandidates.length > 0, get: (p) => p.output_type },
+    { label: 'Process connection', specified: /\b(npt|bsp|flange|thread|connection)\b/.test(rawTextLower), get: (p) => p.connection },
+    { label: 'Accuracy requirement', specified: /\b(accuracy|±|\+\/-|class\s?[a-b0-9])\b/.test(rawTextLower), get: (p) => p.accuracy },
+  ];
+  for (const dim of fixedDims) {
+    if (dim.specified) continue;
+    const distinctValues = [...new Set(top.map((r) => dim.get(r.product)).filter(Boolean))];
+    if (distinctValues.length > 1) {
+      clarifications.push({ parameter: dim.label, candidateValues: distinctValues });
+    }
+  }
+
+  // Family-specific attributes (product_extra_spec) — union of labels
+  // across the top candidates, same "differ + enquiry silent on it" test.
+  const labelSet = new Set();
+  top.forEach((r) => (r.product.extra_specs || []).forEach((s) => labelSet.add(s.label)));
+  for (const label of labelSet) {
+    if (rawTextLower.includes(label.toLowerCase())) continue; // enquiry did mention this attribute by name
+    const distinctValues = [...new Set(
+      top.map((r) => (r.product.extra_specs || []).find((s) => s.label === label)?.value).filter(Boolean)
+    )];
+    if (distinctValues.length > 1) {
+      clarifications.push({ parameter: label, candidateValues: distinctValues });
+    }
+  }
+
+  return clarifications;
 }
 
 /**
  * Runs the full match pipeline for ONE enquiry's text.
  * @param {string} text - raw enquiry text for this single item
- * @param {{ attachmentNames?: string[], sourceExcerpt?: string, enrichWithWeb?: boolean }} [opts]
+ * @param {{ attachmentNames?: string[], sourceExcerpt?: string, enrichFromDatasheet?: boolean }} [opts]
  */
-async function matchSingleEnquiry(text, { attachmentNames = [], enrichWithWeb = true } = {}) {
+async function matchSingleEnquiry(text, { attachmentNames = [], enrichFromDatasheet = true } = {}) {
   const { rows: categories } = await db.query('SELECT * FROM categories ORDER BY label');
   const detectionText = [text, ...attachmentNames].join(' ');
-  const categoryId = detectCategory(detectionText, categories);
   const parsed = parseEnquiryText(text);
+
+  // Deterministic alias/label matching first (instant, exact); only if that
+  // finds nothing does an LLM classification step run, constrained to this
+  // exact category list so it can never invent a family that doesn't exist.
+  let categoryId = detectCategory(detectionText, categories);
+  let categorySource = categoryId ? 'alias' : null;
+  if (!categoryId) {
+    categoryId = await classifyCategory(detectionText, categories);
+    if (categoryId) categorySource = 'llm';
+  }
 
   if (!categoryId) {
     return {
@@ -228,7 +287,7 @@ async function matchSingleEnquiry(text, { attachmentNames = [], enrichWithWeb = 
       parsed,
       results: [],
       provider: 'none',
-      warning: 'Could not identify a product family from this enquiry. Please mention the product type explicitly (e.g. "pressure transmitter", "temperature switch").',
+      warning: 'Could not identify a product family from this enquiry. Please mention the product type explicitly (e.g. "pressure transmitter", "RTD", "process indicator").',
     };
   }
 
@@ -239,7 +298,12 @@ async function matchSingleEnquiry(text, { attachmentNames = [], enrichWithWeb = 
       EXISTS(
         SELECT 1 FROM product_catalogue_files f
         WHERE f.product_id = p.id AND f.is_current = TRUE
-      ) AS has_catalogue
+      ) AS has_catalogue,
+      COALESCE(
+        (SELECT json_agg(json_build_object('label', es.label, 'value', es.value) ORDER BY es.label)
+         FROM product_extra_spec es WHERE es.product_id = p.id),
+        '[]'
+      ) AS extra_specs
     FROM products p JOIN categories c ON c.id = p.category_id
     WHERE p.category_id = $1
     ORDER BY p.family, p.id`;
@@ -278,10 +342,11 @@ async function matchSingleEnquiry(text, { attachmentNames = [], enrichWithWeb = 
     provider = 'fallback-deterministic';
   }
 
-  // Attach requested-vs-actual + sources (catalogue always; web only for the
-  // top few candidates and only when something is genuinely unconfirmed —
-  // running this for every candidate would be slow and mostly wasted).
-  const WEB_ENRICH_TOP_N = 3;
+  // Attach requested-vs-actual + sources (catalogue link always; datasheet
+  // text search only for the top few candidates and only when something is
+  // genuinely unconfirmed — running this for every candidate would be slow
+  // and mostly wasted).
+  const DATASHEET_ENRICH_TOP_N = 3;
   for (let i = 0; i < llmResults.length; i++) {
     const r = llmResults[i];
     r.requestedVsActual = buildRequestedVsActual(parsed, r.product);
@@ -289,17 +354,18 @@ async function matchSingleEnquiry(text, { attachmentNames = [], enrichWithWeb = 
     if (r.product.has_catalogue) {
       r.sources.push({ type: 'catalogue', productId: r.product.id, label: `${r.product.model} — published datasheet` });
     }
-    if (enrichWithWeb && i < WEB_ENRICH_TOP_N) {
-      const { webFindings, sources: webSources, webLookupNote } = await enrichMissingSpecsWithWeb(r, categoryLabel);
-      r.webFindings = webFindings;
-      r.sources.push(...webSources);
-      if (webLookupNote) r.webLookupNote = webLookupNote;
+    if (enrichFromDatasheet && i < DATASHEET_ENRICH_TOP_N) {
+      const { datasheetFindings, sources: datasheetSources } = await enrichMissingSpecsFromDatasheet(r, categoryLabel);
+      r.datasheetFindings = datasheetFindings;
+      r.sources.push(...datasheetSources);
     } else {
-      r.webFindings = [];
+      r.datasheetFindings = [];
     }
   }
 
-  return { text, categoryId, parsed, results: llmResults, provider };
+  const clarificationsNeeded = computeClarificationsNeeded(parsed, llmResults);
+
+  return { text, categoryId, categorySource, parsed, results: llmResults, provider, clarificationsNeeded };
 }
 
 /**
