@@ -6,6 +6,18 @@ import { api } from '../api';
 import TopBar from '../components/TopBar';
 
 const ACCEPTED = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt';
+// Of any attached files, the first one matching these types has its actual
+// CONTENT parsed and split into enquiries server-side (see api.matchEnquiry).
+// Others are still shown as attachments but only their filename is used
+// (as a category-detection hint), same as before this change.
+const CONTENT_MIME_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+];
+function isContentBearing(file) {
+  return CONTENT_MIME_TYPES.includes(file.type) || /\.(pdf|xlsx|xls)$/i.test(file.name);
+}
 
 export default function ChatPage() {
   const { chatHistory, saveToHistory, openHistoryEntry, enquiry, setEnquiry, startNewChat } = useApp();
@@ -48,25 +60,37 @@ export default function ChatPage() {
   }
 
   async function handleSend() {
-    if (!text.trim()) {
-      setError('Type your requirement first.');
+    const contentFile = files.find(isContentBearing);
+    if (!text.trim() && !contentFile) {
+      setError('Type your requirement, or attach a PDF/Excel enquiry file.');
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      // Single call: the server detects the product category, fetches only
-      // that family's published catalogue products, and asks the LLM to
-      // score them against the raw enquiry text. No matching logic runs
-      // in the browser anymore.
-      const { parsed, results, provider, warning } = await api.matchEnquiry(
+      // Single call: the server extracts content from the attached file (if
+      // any), SPLITS it into however many separate product enquiries it
+      // contains, then — per enquiry — detects the product category,
+      // fetches only that family's published catalogue products, and asks
+      // the LLM to score them. No matching logic runs in the browser.
+      const otherFileNames = files.filter((f) => f !== contentFile).map((f) => f.name);
+      const { items, itemCount, splitMethod, fileWarning } = await api.matchEnquiry(
         text,
-        files.map((f) => f.name)
+        otherFileNames,
+        contentFile
       );
+      const warning = fileWarning;
       if (warning) setError(warning);
-      if (!results.length) {
-        setError((prev) => prev || 'No matching products were found for this enquiry. Check the admin console has published catalogue entries for this product family.');
+      if (!itemCount) {
+        setError((prev) => prev || 'No enquiries could be identified in this text/file.');
       }
+
+      // Give every match result its own local selectedIndex (which
+      // alternative product is currently shown for THAT enquiry), so
+      // flipping between enquiries on the matching page doesn't reset a
+      // reviewer's choice on the others.
+      const itemsWithSelection = (items || []).map((it) => ({ ...it, selectedIndex: 0 }));
+      const totalCandidates = itemsWithSelection.reduce((sum, it) => sum + (it.results?.length || 0), 0);
 
       // Append this turn (user message + assistant summary) onto the
       // existing thread instead of overwriting it, so reopening this
@@ -78,10 +102,11 @@ export default function ChatPage() {
         {
           role: 'assistant',
           at: new Date().toISOString(),
-          resultCount: results.length,
-          topModel: results[0]?.product?.model,
-          topPercent: results[0]?.percent,
-          warning: warning || (!results.length ? 'No matching products found.' : null),
+          enquiryCount: itemCount,
+          resultCount: totalCandidates,
+          topModel: itemsWithSelection[0]?.results?.[0]?.product?.model,
+          topPercent: itemsWithSelection[0]?.results?.[0]?.percent,
+          warning: warning || (!itemCount ? 'No enquiries found in this text/file.' : null),
         },
       ];
       const messages = [...(enquiry?.messages || []), ...turn];
@@ -89,17 +114,16 @@ export default function ChatPage() {
       const snapshot = {
         text,
         attachments: [...existingAttachments, ...newAttachments],
-        parsed,
-        results,
-        provider,
-        selectedIndex: 0,
+        items: itemsWithSelection,
+        selectedItemIndex: 0,
+        splitMethod,
         messages,
         historyId: enquiry?.historyId || Date.now(), // stable id: editing updates the same conversation, not a new one
       };
 
       saveToHistory(snapshot);
       setEnquiry(snapshot);
-      if (results.length) navigate('/matching');
+      if (itemCount) navigate('/matching');
     } catch (e) {
       setError(`Could not run matching: ${e.message}`);
     } finally {
@@ -149,13 +173,18 @@ export default function ChatPage() {
                     <div className="chat-bubble chat-bubble-assistant" key={i}>
                       {m.warning ? (
                         m.warning
+                      ) : m.enquiryCount > 1 ? (
+                        <>
+                          Split this into <strong>{m.enquiryCount} enquiries</strong> — {m.resultCount} candidate matches total.
+                          Top result so far: <strong>{m.topModel}</strong> at <strong>{m.topPercent}%</strong>.
+                        </>
                       ) : (
                         <>
                           Found {m.resultCount} candidate{m.resultCount === 1 ? '' : 's'} — top match{' '}
                           <strong>{m.topModel}</strong> at <strong>{m.topPercent}%</strong>.
                         </>
                       )}
-                      {i === enquiry.messages.length - 1 && enquiry.results?.length > 0 && (
+                      {i === enquiry.messages.length - 1 && enquiry.items?.length > 0 && (
                         <div style={{ marginTop: 10 }}>
                           <button className="secondary-btn" onClick={handleViewMatch}>View match results →</button>
                         </div>
@@ -224,7 +253,7 @@ export default function ChatPage() {
             </button>
           </div>
           <p className="hint" style={{ padding: '0 20px 12px', margin: 0 }}>
-            Attachments are captured and shown on the next screen. Matching is now done by the LLM against your published catalogue — automatic text extraction from PDF/DOCX/XLSX attachments is a future improvement; for now, typed text drives matching.
+            Attach a PDF or Excel enquiry file and its content is read automatically — if it contains multiple product requests, each one gets its own match result. Matching is done by the LLM against your published catalogue first; unconfirmed specs are looked up on the web only if that's enabled, and are always shown with a source. Other attachment types are listed for reference only.
           </p>
         </main>
       </div>

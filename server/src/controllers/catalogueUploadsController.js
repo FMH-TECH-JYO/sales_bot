@@ -18,7 +18,7 @@ const { extractProductDraft } = require('../services/extractProductDraft');
 async function uploadCatalogue(req, res) {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded (expected multipart field "file")' });
 
-  const { url, hash } = storage.save(req.file.buffer, req.file.originalname);
+  const { url, hash } = await storage.save(req.file.buffer, req.file.originalname, req.file.mimetype);
 
   const existing = await db.query(`SELECT * FROM catalogue_uploads WHERE file_hash = $1`, [hash]);
   if (existing.rows.length > 0) {
@@ -198,7 +198,7 @@ module.exports = {
 async function viewCatalogueFile(req, res) {
   const { rows } = await db.query(`SELECT stored_file_url, original_filename FROM catalogue_uploads WHERE id = $1`, [req.params.id]);
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
-  const buffer = storage.getBuffer(rows[0].stored_file_url);
+  const buffer = await storage.getBuffer(rows[0].stored_file_url);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${rows[0].original_filename}"`);
   res.send(buffer);

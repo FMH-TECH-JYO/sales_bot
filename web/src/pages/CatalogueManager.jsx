@@ -16,6 +16,15 @@ const STATUS_COLORS = {
 const OUTPUT_OPTIONS = ['switch', '4-20mA', 'hart', 'modbus', 'visual'];
 const HAZARDOUS_OPTIONS = ['safe', 'flameproof', 'both'];
 
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'uploaded', label: 'Uploaded' },
+  { key: 'drafted', label: 'Drafted awaiting review' },
+  { key: 'in_review', label: 'In review' },
+  { key: 'published', label: 'Published' },
+  { key: 'rejected', label: 'Rejected' },
+];
+
 function StatusBadge({ status }) {
   return (
     <span
@@ -144,10 +153,23 @@ function UploadPanel({ categories, onUploaded, onCategoryCreated }) {
 // ---------------------------------------------------------------------------
 // Uploads table
 // ---------------------------------------------------------------------------
-function UploadsTable({ uploads, selectedId, onSelect }) {
+function UploadsTable({ uploads, selectedId, onSelect, statusCounts, statusFilter, onStatusFilterChange }) {
   return (
     <div className="panel">
-      <h2>Catalogue uploads ({uploads.length})</h2>
+      <div className="admin-filter-row">
+        <h2 style={{ margin: 0 }}>Catalogue uploads ({statusCounts.total ?? uploads.length})</h2>
+      </div>
+      <div className="admin-filter-chips" style={{ marginBottom: 12 }}>
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            className={`chip-btn ${statusFilter === f.key ? 'chip-btn-active' : ''}`}
+            onClick={() => onStatusFilterChange(f.key)}
+          >
+            {f.label}{f.key !== 'all' ? ` (${statusCounts.byStatus?.[f.key] || 0})` : ''}
+          </button>
+        ))}
+      </div>
       <table>
         <thead>
           <tr>
@@ -397,10 +419,13 @@ export default function CatalogueManager() {
   const [categories, setCategories] = useState([]);
   const [uploads, setUploads] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusCounts, setStatusCounts] = useState({ total: 0, byStatus: {} });
 
   const refreshUploads = useCallback(() => {
-    api.getUploads().then(setUploads).catch(console.error);
-  }, []);
+    api.getUploads(statusFilter === 'all' ? null : statusFilter).then(setUploads).catch(console.error);
+    api.getUploadStatusCounts().then(setStatusCounts).catch(console.error);
+  }, [statusFilter]);
 
   useEffect(() => {
     api.getCategories().then(setCategories).catch(console.error);
@@ -424,7 +449,14 @@ export default function CatalogueManager() {
       />
 
       <div className="split">
-        <UploadsTable uploads={uploads} selectedId={selectedId} onSelect={setSelectedId} />
+        <UploadsTable
+          uploads={uploads}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          statusCounts={statusCounts}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+        />
         <ReviewPanel uploadId={selectedId} categories={categories} onChanged={refreshUploads} />
       </div>
       </div>

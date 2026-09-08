@@ -11,12 +11,9 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB — generous for a datasheet PDF
   fileFilter: (req, file, cb) => {
-    const okTypes = ['application/pdf'];
-    if (okTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`Unsupported file type "${file.mimetype}" — only PDF is accepted in Phase 2. DOCX/XLSX enquiry parsing comes later.`));
-    }
+    const ext = (file.originalname.match(/\.[^.]+$/)?.[0] || '').toLowerCase();
+    const allowed = ['.pdf', '.docx', '.docm', '.dotx', '.xlsx', '.xlsm', '.xltx', '.csv', '.tsv', '.txt', '.md', '.text'];
+    cb(allowed.includes(ext) ? null : new Error(`Unsupported attachment "${file.originalname}". Use PDF, DOCX, XLSX, CSV, TSV, TXT, or MD.`), allowed.includes(ext));
   },
 });
 

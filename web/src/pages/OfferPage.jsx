@@ -31,7 +31,11 @@ export default function OfferPage() {
   const [manualValues, setManualValues] = useState({});
   const [docxError, setDocxError] = useState(null);
 
-  const p0 = enquiry?.results?.[enquiry.selectedIndex]?.product;
+  // Offer generation always targets whichever single enquiry item the user
+  // was viewing on the matching page (enquiry.items can hold several, one
+  // per product enquiry found in the source document).
+  const currentItem = enquiry?.items?.[enquiry.selectedItemIndex ?? 0];
+  const p0 = currentItem?.results?.[currentItem.selectedIndex ?? 0]?.product;
 
   useEffect(() => {
     if (!p0) return;
@@ -46,7 +50,7 @@ export default function OfferPage() {
       .catch(() => setTemplateStatus('none'));
   }, [p0?.id]);
 
-  if (!enquiry || !enquiry.results?.length) {
+  if (!enquiry || !currentItem?.results?.length) {
     return (
       <div className="chat-shell">
         <TopBar title="Offer" />
@@ -58,7 +62,7 @@ export default function OfferPage() {
     );
   }
 
-  const selected = enquiry.results[enquiry.selectedIndex];
+  const selected = currentItem.results[currentItem.selectedIndex ?? 0];
   const p = selected.product;
   const current = offer || DEFAULT_OFFER;
   const offerRef = `OFR-${p.id}-${new Date().getFullYear()}-${String(current.version).padStart(2, '0')}`;

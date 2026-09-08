@@ -31,12 +31,29 @@ export const api = {
   // The real matching pipeline: server fetches the relevant category's
   // published catalogue products and asks the LLM (Ollama) to score them
   // against the enquiry text. No client-side matching logic anymore.
-  matchEnquiry: (text, attachmentNames) =>
-    request('/enquiries/match', {
+  //
+  // A single call can return MULTIPLE enquiries' worth of results — the
+  // server splits an uploaded Excel/PDF (or a typed multi-item message)
+  // into one match set per enquiry it finds. Response shape:
+  // { text, items: [...], itemCount, splitMethod, fileWarning? }
+  //
+  // `file`, when given, is the one attachment whose CONTENT drives matching
+  // (a File object — PDF or Excel). Other attachments are still listed by
+  // name only via attachmentNames, same as before.
+  matchEnquiry: (text, attachmentNames, file) => {
+    if (file) {
+      const form = new FormData();
+      form.append('text', text || '');
+      form.append('file', file);
+      if (attachmentNames?.length) form.append('attachmentNames', JSON.stringify(attachmentNames));
+      return request('/enquiries/match', { method: 'POST', body: form });
+    }
+    return request('/enquiries/match', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, attachmentNames }),
-    }),
+    });
+  },
 
   // Offer generation — fills the real .docx template for the product's
   // category. getOfferFields tells the frontend which placeholders that

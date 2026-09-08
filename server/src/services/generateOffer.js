@@ -15,18 +15,30 @@ const Docxtemplater = require('docxtemplater');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', '..', 'templates', 'offers');
 
+// A single company-wide offer template used for EVERY category/model, unless
+// a category-specific override file exists. pressure_gauge.docx carries the
+// SP placeholder set ({{model1}}, {{range1}}, {{dialsize1}}, ... — the same
+// 23 tags as "placeholders of SP.docx") and is treated as that common
+// template, so every match (SP, LT, GC, any published product) generates an
+// offer in this same format instead of hitting "No offer template uploaded".
+const COMMON_TEMPLATE_FILE = 'pressure_gauge.docx';
+
 function templatePathFor(categoryId) {
-  return path.join(TEMPLATES_DIR, `${categoryId}.docx`);
+  const perCategory = path.join(TEMPLATES_DIR, `${categoryId}.docx`);
+  if (fs.existsSync(perCategory)) return perCategory;
+  return path.join(TEMPLATES_DIR, COMMON_TEMPLATE_FILE);
 }
 
 function hasTemplate(categoryId) {
+  // Always true as long as the common template file is present — categories
+  // fall back to it, so "no template" only happens if that file is deleted.
   return fs.existsSync(templatePathFor(categoryId));
 }
 
 function loadDoc(categoryId) {
   const templatePath = templatePathFor(categoryId);
   if (!fs.existsSync(templatePath)) {
-    throw new Error(`No offer template uploaded for category "${categoryId}" yet. Add server/templates/offers/${categoryId}.docx with the same {{placeholder}} style as the existing templates.`);
+    throw new Error(`No offer template found — expected the common template at server/templates/offers/${COMMON_TEMPLATE_FILE} (or a category-specific server/templates/offers/${categoryId}.docx).`);
   }
   const content = fs.readFileSync(templatePath);
   const zip = new PizZip(content);

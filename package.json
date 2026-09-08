@@ -8,7 +8,7 @@
     "web"
   ],
   "scripts": {
-    "db:migrate": "psql \"$DATABASE_URL\" -f db/schema.sql",
+    "db:migrate": "node db/migrate.js",
     "db:seed": "node db/seed.js",
     "dev:server": "npm run dev --workspace=server"
   },

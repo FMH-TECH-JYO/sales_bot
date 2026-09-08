@@ -19,9 +19,10 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 /**
  * @param {Buffer} buffer - file contents
  * @param {string} originalFilename
+ * @param {string} [mimeType] - accepted for interface parity with dbStorage.js; unused here (not persisted to disk)
  * @returns {{ url: string, hash: string }} url is a storage-relative key (not a public URL yet)
  */
-function save(buffer, originalFilename) {
+function save(buffer, originalFilename, mimeType) { // eslint-disable-line no-unused-vars
   const hash = crypto.createHash('sha256').update(buffer).digest('hex');
   const ext = path.extname(originalFilename) || '.pdf';
   const key = `${hash}${ext}`;

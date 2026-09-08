@@ -255,6 +255,36 @@ tr.row-selected { background: var(--fm-blue-10); }
 
 .match-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
 
+/* --- Multi-enquiry tab strip (one Excel/PDF upload -> several enquiries) --- */
+.enquiry-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.enquiry-tab {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 14px; cursor: pointer; font-weight: 700;
+}
+.enquiry-tab:hover { border-color: var(--fm-blue-50); }
+.enquiry-tab-active { border-color: var(--navy); background: var(--fm-blue-10); }
+.enquiry-tab-num { color: var(--sub); font-size: 12px; }
+.enquiry-tab-pct { font-size: 13.5px; }
+
+/* --- Requested vs actual comparison table --- */
+.rva-table-wrap { margin: 16px 0; }
+.rva-table-wrap h4 { font-size: 12.5px; text-transform: uppercase; color: var(--steel); margin: 0 0 8px; }
+.rva-table th { background: var(--fm-blue-5); }
+.rva-status { font-weight: 700; font-size: 12.5px; }
+.rva-status.rva-match { color: var(--fm-success); }
+.rva-status.rva-compare { color: var(--fm-warning); }
+.rva-status.rva-missing { color: var(--fm-danger); }
+.rva-status.rva-not_requested { color: var(--sub); font-weight: 500; }
+
+/* --- Sources --- */
+.sources-block { margin: 14px 0; padding: 10px 14px; border-radius: 8px; background: var(--fm-blue-5); border: 1px solid var(--line); }
+.sources-block h4 { margin: 0 0 6px; font-size: 12.5px; text-transform: uppercase; color: var(--steel); }
+.sources-block ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
+.sources-block a { color: var(--navy); }
+.source-type-chip { margin-left: 8px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .3px; color: var(--sub); background: var(--fm-blue-10); border-radius: 999px; padding: 1px 8px; }
+.source-link { font-size: 11.5px; color: var(--navy); }
+
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; flex: 1; color: var(--sub); }
 
 /* =========================================================================

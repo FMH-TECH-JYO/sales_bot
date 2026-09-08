@@ -1,16 +1,28 @@
 // server/src/controllers/productsController.js
 const db = require('../config/db');
 
+// Shared SELECT fragment: alongside the published (is_current) catalogue
+// file, also surface a catalogue upload that's been drafted/reviewed for
+// this exact product id but not published yet — so the sales engineer sees
+// "already uploaded, pending publish" instead of a flat "not yet uploaded"
+// when an admin genuinely has started the work in Catalogue Manager.
+const CATALOGUE_STATUS_FRAGMENT = `
+      EXISTS(
+        SELECT 1 FROM product_catalogue_files f
+        WHERE f.product_id = p.id AND f.is_current = TRUE
+      ) AS has_catalogue,
+      (
+        SELECT cu.id FROM catalogue_uploads cu
+        WHERE cu.extracted_json->>'id' = p.id AND cu.status NOT IN ('rejected', 'published')
+        ORDER BY cu.uploaded_at DESC LIMIT 1
+      ) AS pending_catalogue_upload_id`;
+
 // GET /products?category=pressure_switch
 async function listProducts(req, res) {
   const { category } = req.query;
   const params = [];
   let sql = `
-    SELECT p.*, c.label AS category_label,
-      EXISTS(
-        SELECT 1 FROM product_catalogue_files f
-        WHERE f.product_id = p.id AND f.is_current = TRUE
-      ) AS has_catalogue
+    SELECT p.*, c.label AS category_label,${CATALOGUE_STATUS_FRAGMENT}
     FROM products p JOIN categories c ON c.id = p.category_id`;
   if (category) {
     params.push(category);

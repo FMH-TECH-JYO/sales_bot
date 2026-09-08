@@ -222,6 +222,23 @@ CREATE TABLE audit_log (
 -- workflow. This is what lets a new product be added by uploading a PDF and
 -- publishing it, with no code change or redeploy.
 -- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- FILE STORAGE (db-backed) — the actual bytes for anything uploaded through
+-- storage/index.js (catalogue PDFs, enquiry files) live HERE, not on local
+-- disk. This is what makes uploads travel with the database: clone the repo
+-- on a different machine, point it at the same DATABASE_URL, and every
+-- catalogue file that was ever published is already there — no separate
+-- file sync step, no missing files because someone's local `server/uploads/`
+-- folder (gitignored) never left their machine.
+-- See server/src/storage/dbStorage.js.
+-- ---------------------------------------------------------------------------
+CREATE TABLE stored_files (
+  key                TEXT PRIMARY KEY,   -- sha256(content)+ext, same key scheme as the old local-disk driver
+  data               BYTEA NOT NULL,     -- SQLite: BLOB
+  mime_type          TEXT,
+  original_filename  TEXT,
+  uploaded_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE catalogue_uploads (
   id                 SERIAL PRIMARY KEY,

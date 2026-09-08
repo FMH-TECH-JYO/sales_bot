@@ -7,6 +7,7 @@ const ctrl = require('../controllers/catalogueUploadsController');
 
 router.post('/', upload.single('file'), asyncHandler(ctrl.uploadCatalogue));
 router.get('/', asyncHandler(ctrl.listCatalogueUploads));
+router.get('/status-counts', asyncHandler(ctrl.statusCounts));
 router.get('/:id', asyncHandler(ctrl.getCatalogueUpload));
 router.get('/:id/file', asyncHandler(ctrl.viewCatalogueFile));
 router.patch('/:id', asyncHandler(ctrl.updateDraft));
