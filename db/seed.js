@@ -1,7 +1,15 @@
 // db/seed.js
 // Run with: node db/seed.js
-// Loads categories + the 29-product baseline catalogue into Postgres.
-// Idempotent: safe to re-run (uses ON CONFLICT DO UPDATE / DO NOTHING).
+// Loads categories + the 29-product baseline catalogue into Postgres, AND
+// registers each of those products in `catalogue_uploads` (status='published')
+// so the Catalogue Manager admin screen shows the full catalogue, not just
+// items uploaded through the "upload a PDF" flow. This is what makes the
+// catalogue list consistent for everyone: anyone who pulls this repo, spins
+// up Postgres, and runs this one script gets the exact same products AND the
+// exact same Catalogue Manager list — not just whatever happens to be in one
+// person's local database.
+// Idempotent: safe to re-run (uses ON CONFLICT DO UPDATE / DO NOTHING, and a
+// existence check before creating each catalogue_uploads row).
 
 require('dotenv').config();
 const { Client } = require('pg');
@@ -29,6 +37,9 @@ async function main() {
 
   // --- products (+ children) ---
   let syntheticIdCounter = 1;
+  let uploadsCreated = 0;
+  let uploadsSkipped = 0;
+
   for (const p of seed.products) {
     // two temp_switch entries in the seed have model:'—' (no catalogue code) — give them a stable synthetic id
     const id = p.model && p.model !== '—'
@@ -96,9 +107,46 @@ async function main() {
         );
       }
     }
+
+    // --- register this product with the Catalogue Manager ---
+    // Without this, the baseline catalogue only exists in `products` and never
+    // shows up on the "Catalogue uploads" screen (that screen only reads
+    // `catalogue_uploads`, which is otherwise populated solely by the
+    // upload-a-PDF admin flow). One row per product here keeps the two in
+    // sync for every environment that runs this seed script.
+    const { rows: existingUpload } = await client.query(
+      `SELECT id FROM catalogue_uploads WHERE product_id = $1 LIMIT 1`,
+      [id]
+    );
+    if (existingUpload.length === 0) {
+      const extracted_json = {
+        id,
+        model: p.model,
+        family: p.family,
+        blurb: p.blurb,
+        val_min: p.valMin,
+        val_max: p.valMax,
+        temp_max: p.tempMax,
+        accuracy: p.accuracy,
+        output_type: p.output,
+        hazardous: p.hazardous,
+        connection: p.connection,
+        industries: p.industries || [],
+      };
+      await client.query(
+        `INSERT INTO catalogue_uploads
+           (original_filename, stored_file_url, file_hash, mime_type, category_id,
+            status, extracted_json, extraction_provider, product_id, published_at)
+         VALUES ($1,$2,$3,$4,$5,'published',$6,'seed-baseline',$7,CURRENT_TIMESTAMP)`,
+        [`${id}.pdf`, `seed:${id}`, null, null, p.category, extracted_json, id]
+      );
+      uploadsCreated++;
+    } else {
+      uploadsSkipped++;
+    }
   }
 
-  console.log('Seed complete.');
+  console.log(`Seed complete. Catalogue Manager: ${uploadsCreated} upload row(s) created, ${uploadsSkipped} already existed.`);
   await client.end();
 }
 
