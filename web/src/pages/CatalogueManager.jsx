@@ -456,15 +456,24 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
           <input value={industriesText} onChange={(e) => setIndustriesText(e.target.value)} />
         </div>
         <div className="field-row full">
-          <label><ConfidenceDot value={confidence.extra_specs} /> Extra specs — one per line, "Label: Value"</label>
+          <label>
+            <ConfidenceDot value={confidence.extra_specs} /> Specification table — one row per line, "Label: Value"
+            {extraSpecsText.trim() && (
+              <span className="hint" style={{ fontWeight: 400, marginLeft: 8 }}>
+                {extraSpecsText.split('\n').filter((l) => l.includes(':')).length} rows
+              </span>
+            )}
+          </label>
           <textarea
             value={extraSpecsText}
             onChange={(e) => setExtraSpecsText(e.target.value)}
-            rows={4}
-            placeholder={'Wiring: 3-wire\nElement: Pt100 Class B\nDifferential: adjustable, 10-20% of range'}
+            rows={16}
+            placeholder={'Model: GP\nType: Direct reading\nMounting: Bottom Entry, Local mount\nNominal size: 2.5" (63mm)\nDial: Aluminium, white background with black numerals\nCasing & Bezel Material: SS 304, bayonet type bezel, IP65'}
           />
           <p className="hint" style={{ marginTop: 2 }}>
-            Whatever matters for THIS product family and isn't one of the fixed fields above — matching uses these too.
+            This prints verbatim in the customer's techno-commercial offer, <strong>in the order listed here</strong> —
+            reorder the lines to change the offer. A real gauge runs to around 28 rows, so if this looks short the
+            extraction fell short; check it against the PDF before publishing. Matching uses these too.
           </p>
         </div>
       </div>

@@ -29,6 +29,7 @@
 // back to exactly which spreadsheet rows produced which match result.
 
 const XLSX = require('xlsx');
+const { parseSpreadsheetTable, pickKnownFields } = require('./parseSpreadsheetTable');
 const { extractText: extractPdfText } = require('./pdfParser');
 
 const ID_COLUMN_RE = /^(s\.?\s?no\.?|sr\.?\s?no\.?|item\s?no\.?|enq(uiry)?\s?no\.?|line\s?no\.?|#)$/i;
@@ -50,74 +51,44 @@ function isBlankRow(row) {
  * @returns {{ blocks: Array<{ text: string, rowRange: string, rows: object[] }>, sheetName: string, columns: string[] }}
  */
 function parseExcelEnquiries(buffer) {
-  const wb = XLSX.read(buffer, { type: 'buffer' });
-  const sheetName = wb.SheetNames.find((n) => {
-    const sheet = wb.Sheets[n];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
-    return rows.length > 0;
-  }) || wb.SheetNames[0];
-
-  const sheet = wb.Sheets[sheetName];
-  const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false })
-    .map((r) => {
-      const cleaned = {};
-      for (const [k, v] of Object.entries(r)) {
-        const key = String(k).trim();
-        cleaned[key] = v;
-      }
-      return cleaned;
-    })
-    .filter((r) => !isBlankRow(r));
-
-  if (rawRows.length === 0) {
-    return { blocks: [], sheetName, columns: [] };
+  // Header/table detection lives in parseSpreadsheetTable.js. The old code here
+  // called XLSX.utils.sheet_to_json(sheet), which assumes row 1 is the header —
+  // on a real RFQ (merged title banner, two-row header) that produced columns
+  // named __EMPTY_9 and emitted the header rows themselves as product
+  // enquiries. See that file's header comment for the worked example.
+  const table = parseSpreadsheetTable(buffer);
+  if (!table.rows.length) {
+    return { blocks: [], sheetName: table.sheetName, columns: table.columns, title: table.title, diagnostic: table.diagnostic };
   }
 
-  const columns = Object.keys(rawRows[0]);
-  const idColumn = columns.find((c) => ID_COLUMN_RE.test(c));
-  const productColumn = columns.find((c) => PRODUCT_COLUMN_RE.test(c));
-
+  // Group consecutive rows that share an identifier (tag / serial), so an item
+  // described across several rows stays one enquiry. Rows with distinct tags —
+  // the common case — become one block each.
   const groups = [];
   let current = null;
-  let lastIdValue = undefined;
-
-  rawRows.forEach((row, i) => {
-    const excelRowNo = i + 2; // +1 for 0-index, +1 for header row
-    if (idColumn) {
-      const idVal = row[idColumn] != null ? String(row[idColumn]).trim() : '';
-      const startsNew = idVal !== '' && idVal !== lastIdValue;
-      if (startsNew || !current) {
-        current = { rows: [row], startRow: excelRowNo, endRow: excelRowNo };
-        groups.push(current);
-        if (idVal !== '') lastIdValue = idVal;
-      } else {
-        current.rows.push(row);
-        current.endRow = excelRowNo;
-      }
-    } else if (productColumn) {
-      const productVal = row[productColumn] != null ? String(row[productColumn]).trim() : '';
-      const startsNew = productVal !== '' || !current;
-      if (startsNew) {
-        current = { rows: [row], startRow: excelRowNo, endRow: excelRowNo };
-        groups.push(current);
-      } else {
-        current.rows.push(row);
-        current.endRow = excelRowNo;
-      }
-    } else {
-      // No recognizable grouping column — one row is one enquiry.
-      current = { rows: [row], startRow: excelRowNo, endRow: excelRowNo };
+  let lastId;
+  for (const row of table.rows) {
+    const known = pickKnownFields(row.cells);
+    const id = known.tagNo || null;
+    if (!current || (id && id !== lastId)) {
+      current = { rows: [row], known, startRow: row.excelRow, endRow: row.excelRow };
       groups.push(current);
+      if (id) lastId = id;
+    } else {
+      current.rows.push(row);
+      current.endRow = row.excelRow;
     }
-  });
+  }
 
   const blocks = groups.map((g) => ({
-    text: g.rows.map(cellsToText).join('\n---\n'),
+    text: g.rows.map((r) => r.text).join('\n---\n'),
     rowRange: g.startRow === g.endRow ? `row ${g.startRow}` : `rows ${g.startRow}-${g.endRow}`,
-    rows: g.rows,
+    rows: g.rows.map((r) => r.cells),
+    // Read straight off labelled columns — exact, instant, and no LLM call.
+    known: g.known,
   })).filter((b) => b.text.trim() !== '');
 
-  return { blocks, sheetName, columns };
+  return { blocks, sheetName: table.sheetName, columns: table.columns, title: table.title };
 }
 
 const EXCEL_MIME_TYPES = new Set([
@@ -125,12 +96,21 @@ const EXCEL_MIME_TYPES = new Set([
   'application/vnd.ms-excel', // .xls
 ]);
 
-function isExcelMime(mimetype) {
-  return EXCEL_MIME_TYPES.has(mimetype);
+// MIME first, filename second. See the note in middleware/uploadEnquiryFile.js:
+// a real .xlsx routinely arrives as application/octet-stream, and deciding on
+// MIME alone meant matchEnquiry.js took its "not a supported file" branch and
+// dropped the attachment without a word.
+function isExcelFile(file) {
+  if (EXCEL_MIME_TYPES.has(file?.mimetype)) return true;
+  return /\.(xlsx|xls|xlsm)$/i.test(file?.originalname || '');
 }
-function isPdfMime(mimetype) {
-  return mimetype === 'application/pdf';
+function isPdfFile(file) {
+  if (file?.mimetype === 'application/pdf') return true;
+  return /\.pdf$/i.test(file?.originalname || '');
 }
+// Kept for callers that only have a MIME string.
+function isExcelMime(mimetype) { return EXCEL_MIME_TYPES.has(mimetype); }
+function isPdfMime(mimetype) { return mimetype === 'application/pdf'; }
 
 /**
  * Normalizes ANY supported enquiry attachment (Excel or PDF) down to either
@@ -142,21 +122,30 @@ function isPdfMime(mimetype) {
  * @returns {Promise<{ kind: 'excel'|'pdf', blocks?: object[], text?: string, warning?: string }>}
  */
 async function parseEnquiryFile(file) {
-  if (isExcelMime(file.mimetype)) {
-    const { blocks, sheetName, columns } = parseExcelEnquiries(file.buffer);
+  if (isExcelFile(file)) {
+    const { blocks, sheetName, columns, title, diagnostic } = parseExcelEnquiries(file.buffer);
     if (blocks.length === 0) {
-      return { kind: 'excel', blocks: [], warning: `"${file.originalname}" (sheet "${sheetName}") had no readable rows.` };
+      return {
+        kind: 'excel',
+        blocks: [],
+        warning: `Nothing could be read from "${file.originalname}"` +
+          (sheetName ? ` (sheet "${sheetName}")` : '') + '. ' +
+          (diagnostic || 'No header row followed by data rows was found.') +
+          ' Matching used only the text you typed.',
+      };
     }
-    return { kind: 'excel', blocks, sheetName, columns };
+    return { kind: 'excel', blocks, sheetName, columns, title };
   }
-  if (isPdfMime(file.mimetype)) {
+  if (isPdfFile(file)) {
     const { text, quality } = await extractPdfText(file.buffer);
     if (quality === 'likely_scanned') {
       return { kind: 'pdf', text, warning: `"${file.originalname}" looks scanned/image-based — little or no text could be extracted. OCR isn't supported yet.` };
     }
     return { kind: 'pdf', text };
   }
-  throw new Error(`Unsupported enquiry file type "${file.mimetype}" — only PDF and Excel (.xlsx/.xls) are accepted.`);
+  throw new Error(`Can't read "${file.originalname}" (type "${file.mimetype || 'unknown'}") — only PDF and Excel (.xlsx/.xls) content is parsed.`);
 }
 
-module.exports = { parseEnquiryFile, parseExcelEnquiries, isExcelMime, isPdfMime };
+module.exports = {
+  isExcelFile,
+  isPdfFile, parseEnquiryFile, parseExcelEnquiries, isExcelMime, isPdfMime };

@@ -4,7 +4,9 @@
 // error-handling convention ever changes, this is the only file that needs
 // to change.
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
+  ? import.meta.env.VITE_API_BASE_URL          // '' means "same origin" — a valid setting
+  : 'http://localhost:4000';                   // dev default when the var isn't set at all
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, options);
@@ -16,6 +18,11 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // --- enquiry history (persisted since migration 004) ---
+  getEnquiries: (limit = 50, offset = 0) => request(`/enquiries?limit=${limit}&offset=${offset}`),
+  getEnquiry: (id) => request(`/enquiries/${id}`),
+  getOffers: (limit = 50) => request(`/offers?limit=${limit}`),
+
   getCategories: () => request('/categories'),
   createCategory: (payload) =>
     request('/categories', {

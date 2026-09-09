@@ -207,12 +207,16 @@ async function publishCatalogue(req, res) {
     // fixed products column — full replace on each (re-)publish so editing
     // one in the review screen doesn't leave a stale duplicate behind.
     await client.query(`DELETE FROM product_extra_spec WHERE product_id = $1`, [p.id]);
+    // sort_order preserves the datasheet's own row order all the way to the
+    // offer's specification table. The array index IS the order — see
+    // db/migrations/005_spec_table_order.sql.
+    let specOrder = 0;
     for (const spec of p.extra_specs || []) {
       if (!spec?.label || !spec?.value) continue;
       await client.query(
-        `INSERT INTO product_extra_spec (product_id, label, value) VALUES ($1,$2,$3)
-         ON CONFLICT (product_id, label) DO UPDATE SET value = EXCLUDED.value`,
-        [p.id, spec.label, spec.value]
+        `INSERT INTO product_extra_spec (product_id, label, value, sort_order) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (product_id, label) DO UPDATE SET value = EXCLUDED.value, sort_order = EXCLUDED.sort_order`,
+        [p.id, spec.label, spec.value, specOrder++]
       );
     }
 

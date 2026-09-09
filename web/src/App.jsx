@@ -13,6 +13,7 @@ import MatchingPage from './pages/MatchingPage';
 import OfferPage from './pages/OfferPage';
 import AdminDashboard from './pages/AdminDashboard';
 import CatalogueManager from './pages/CatalogueManager';
+import EnquiryHistoryPage from './pages/EnquiryHistoryPage';
 
 function RequireRole({ role: required, children }) {
   const { role } = useApp();
@@ -29,6 +30,10 @@ function AppRoutes() {
       <Route path="/chat" element={<RequireRole role="user"><ChatPage /></RequireRole>} />
       <Route path="/matching" element={<RequireRole role="user"><MatchingPage /></RequireRole>} />
       <Route path="/offer" element={<RequireRole role="user"><OfferPage /></RequireRole>} />
+      {/* History is useful to both roles: engineers review what they quoted,
+          admins use it as the demand signal for what to add to the catalogue.
+          RequireRole with no role prop means "any signed-in user". */}
+      <Route path="/history" element={<RequireRole><EnquiryHistoryPage /></RequireRole>} />
 
       <Route path="/admin" element={<RequireRole role="admin"><AdminDashboard /></RequireRole>} />
       <Route path="/admin/catalogues" element={<RequireRole role="admin"><CatalogueManager /></RequireRole>} />

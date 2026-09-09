@@ -18,6 +18,7 @@ export default function TopBar({ title }) {
       <img src={fmLogoWhite} alt="Forbes Marshall" className="top-bar-logo" />
       <div className="top-bar-title">{title}</div>
       <div className="top-bar-right">
+        <button className="link-btn" onClick={() => navigate('/history')}>History</button>
         <span className="role-chip">{role === 'admin' ? 'Admin' : 'Sales Engineer'}</span>
         <button className="link-btn top-bar-logout" onClick={handleLogout}>Log out</button>
       </div>

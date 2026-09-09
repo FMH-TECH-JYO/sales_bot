@@ -43,10 +43,24 @@ const productDraftSchema = {
       items: { type: 'string' },
       description: 'Industries/applications listed in the text, as short labels',
     },
+    // This is the product's FULL specification table, and it is what gets
+    // printed in the techno-commercial offer the customer receives.
+    //
+    // It previously read "any OTHER attribute ... that matters for SELECTING
+    // this product" and "leave empty if the text has nothing beyond the fixed
+    // fields" — tuned for matching. The result: 51 rows across all 29
+    // catalogue products, under two each, while a real Forbes Marshall offer
+    // prints ~28 rows for one pressure gauge (Dial, Casing & Bezel Material,
+    // Movement material, Case Filling, Lens Material, Pointer, Sealing Ring,
+    // Blow Out Disc, Vent Plug...). The offer document defines what this
+    // field must hold, not the matcher.
+    //
+    // Array ORDER is meaningful: it is the print order of the offer's spec
+    // table, carried through to product_extra_spec.sort_order on publish.
     extra_specs: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Any OTHER technical attribute stated in the text that matters for selecting this product but has no dedicated field above — the exact attribute varies by product family (e.g. for an RTD: "Wiring: 3-wire", "Element: Pt100 Class B"; for a switch: "Differential: adjustable, 10-20% of range", "Contact rating: 5A @ 250VAC"; for a level instrument: "Measurement principle: guided wave radar"; for an indicator: "Power: loop-powered, no external supply needed", "Display: 4-digit LCD"). Each entry MUST be formatted exactly as "Label: Value", one attribute per entry, using only what the text actually states. Leave empty if the text has nothing beyond the fixed fields above.',
+      description: 'The COMPLETE specification table for this product, exactly as printed on the datasheet and in the same order it appears there. Include EVERY specification row you can see — construction materials, dimensions, finishes, seals, fittings, electrical details, reference standards, certifications and options — not only the ones that seem important for selection. Include rows that repeat a field above (Model, Range, Process Connection, Accuracy): this list is printed verbatim in the customer offer, so it has to stand on its own. Each entry MUST be formatted exactly as "Label: Value", one row per entry, keeping the datasheet\'s own wording for both label and value. Examples: "Dial: Aluminium, white background with black numerals", "Casing & Bezel Material: SS 304, bayonet type bezel, weatherproof to IP65", "Blow Out Disc: Neoprene", "Sheath Length: 1450mm (Insertion) + 50mm (for adj. gland)". Copy only what the text actually states — never invent a row to fill a gap, and never merge two rows into one.',
     },
   },
   required: ['family', 'blurb', 'output_type', 'hazardous'],

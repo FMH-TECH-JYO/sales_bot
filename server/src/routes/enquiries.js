@@ -9,4 +9,9 @@ const ctrl = require('../controllers/enquiriesController');
 // request, so this route still accepts the old { text } JSON body too.
 router.post('/match', upload.single('file'), asyncHandler(ctrl.match));
 
+// History. '/match' is declared above '/:id' on purpose — Express matches in
+// order, so a '/:id' route registered first would swallow POST /enquiries/match.
+router.get('/', asyncHandler(ctrl.list));
+router.get('/:id', asyncHandler(ctrl.get));
+
 module.exports = router;

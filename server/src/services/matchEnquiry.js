@@ -39,8 +39,9 @@
 
 const db = require('../config/db');
 const { extractStructured } = require('./llmClient');
+const { parseInstrumentTag, tagHintLine } = require('./parseInstrumentTag');
 const { parseEnquiryText, detectCategory } = require('./parseEnquiryText');
-const { parseEnquiryFile, isExcelMime, isPdfMime } = require('./enquiryFileParser');
+const { parseEnquiryFile, isExcelFile, isPdfFile } = require('./enquiryFileParser');
 const { splitEnquiryText } = require('./splitEnquiries');
 const { classifyCategory } = require('./categoryClassifier');
 const { lookupSpecInDatasheet } = require('./internalDatasheetLookup');
@@ -389,7 +390,7 @@ async function matchEnquiries(text, { file, attachmentNames = [] } = {}) {
   let splitMethod = 'single';
   let fileWarning;
 
-  if (file && (isExcelMime(file.mimetype) || isPdfMime(file.mimetype))) {
+  if (file && (isExcelFile(file) || isPdfFile(file))) {
     const parsed = await parseEnquiryFile(file);
     if (parsed.warning) fileWarning = parsed.warning;
 
@@ -398,6 +399,8 @@ async function matchEnquiries(text, { file, attachmentNames = [] } = {}) {
         text: (text && text.trim() ? `${text.trim()}\n\n` : '') + b.text,
         sourceExcerpt: b.text.slice(0, 240),
         sourceRef: `${file.originalname} — ${b.rowRange}`,
+        known: b.known || null,
+        tagHint: tagHintLine(b.known && b.known.tagNo),
       }));
       splitMethod = 'excel_rows';
     } else if (parsed.kind === 'pdf') {
@@ -408,6 +411,14 @@ async function matchEnquiries(text, { file, attachmentNames = [] } = {}) {
       splitMethod = method;
     }
   } else {
+    // A file was attached but isn't one we can read. Previously this branch
+    // ran silently: the upload was dropped, the typed text was matched, and
+    // the response looked completely normal — the user saw results that never
+    // touched their spreadsheet.
+    if (file) {
+      fileWarning = `"${file.originalname}" wasn't read — it arrived as "${file.mimetype || 'no type'}", ` +
+        `and only PDF and Excel (.xlsx/.xls) content is parsed. Matching used only the text you typed.`;
+    }
     const { items, method } = await splitEnquiryText(text || '');
     rawItems = items.map((t) => ({ text: t, sourceExcerpt: t.slice(0, 240), sourceRef: 'typed message' }));
     splitMethod = method;
@@ -424,7 +435,28 @@ async function matchEnquiries(text, { file, attachmentNames = [] } = {}) {
   const items = [];
   for (let i = 0; i < rawItems.length; i++) {
     const raw = rawItems[i];
-    const matched = await matchSingleEnquiry(raw.text, { attachmentNames });
+    // Append the tag interpretation BEFORE matching, so the category
+    // classifier sees it too. Routing a DPT into the plain pressure-transmitter
+    // family is a candidate-SELECTION error; by scoring time it is already too
+    // late, because the right product was never in the shortlist.
+    const enquiryText = raw.tagHint ? `${raw.text}\n${raw.tagHint}` : raw.text;
+    const matched = await matchSingleEnquiry(enquiryText, { attachmentNames });
+    // Tag/qty/MOC read straight off labelled spreadsheet columns beat anything
+    // the LLM inferred from prose — they are exact. Override, don't merge.
+    if (raw.known) {
+      matched.parsed = { ...(matched.parsed || {}) };
+      if (raw.known.tagNo) matched.parsed.tagNo = raw.known.tagNo;
+      if (raw.known.qty != null) matched.parsed.qty = raw.known.qty;
+      if (raw.known.moc) matched.parsed.moc = raw.known.moc;
+      if (raw.known.connection) matched.parsed.connectionRaw = raw.known.connection;
+      const tag = parseInstrumentTag(raw.known.tagNo);
+      if (tag) {
+        matched.parsed.instrumentType = tag.label;
+        matched.parsed.differential = tag.differential;
+        matched.parsed.tagCategoryHint = tag.categoryHint;
+        matched.parsed.outOfScope = tag.outOfScope || false;
+      }
+    }
     items.push({
       index: i,
       sourceExcerpt: raw.sourceExcerpt,

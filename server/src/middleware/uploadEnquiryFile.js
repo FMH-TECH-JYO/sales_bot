@@ -17,10 +17,19 @@ const upload = multer({
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
       'application/vnd.ms-excel', // .xls
     ];
-    if (okTypes.includes(file.mimetype)) {
+    // Browsers are unreliable about spreadsheet MIME types — Windows Chrome
+    // sends application/octet-stream (or an empty string) for .xlsx whenever
+    // the file association is missing or unusual. Judging on MIME alone
+    // rejected perfectly good enquiry files, so the extension is authoritative
+    // and the MIME type is a fallback.
+    const ext = (file.originalname.match(/\.[^.]+$/)?.[0] || '').toLowerCase();
+    const okExts = ['.pdf', '.xlsx', '.xls', '.xlsm'];
+    if (okExts.includes(ext) || okTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`Unsupported file type "${file.mimetype}" for enquiry matching — only PDF and Excel (.xlsx/.xls) content is parsed. Other attachments can still be added as reference, but their content won't drive matching.`));
+      const err = new Error(`Can't read "${file.originalname}" for matching — only PDF and Excel (.xlsx/.xls) content is parsed (this arrived as "${file.mimetype || 'no type'}"). Attach it as reference if you just want it listed.`);
+      err.status = 400;
+      cb(err);
     }
   },
 });

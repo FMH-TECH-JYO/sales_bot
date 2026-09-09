@@ -6,5 +6,6 @@ const ctrl = require('../controllers/offersController');
 
 router.get('/fields/:productId', asyncHandler(ctrl.getFields));
 router.post('/generate', asyncHandler(ctrl.generate));
+router.get('/', asyncHandler(ctrl.list));
 
 module.exports = router;

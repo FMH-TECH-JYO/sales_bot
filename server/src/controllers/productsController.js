@@ -31,7 +31,7 @@ async function getProduct(req, res) {
   const [industries, keywords, extraSpec, deviations, orderCode, segments, rangeTable, catalogueFile] = await Promise.all([
     db.query(`SELECT industry FROM product_industries WHERE product_id=$1`, [id]),
     db.query(`SELECT keyword FROM product_keywords WHERE product_id=$1`, [id]),
-    db.query(`SELECT label, value FROM product_extra_spec WHERE product_id=$1`, [id]),
+    db.query(`SELECT label, value FROM product_extra_spec WHERE product_id=$1 ORDER BY sort_order NULLS LAST, label`, [id]),
     db.query(`SELECT text, type FROM product_deviations WHERE product_id=$1`, [id]),
     db.query(`SELECT skeleton, example FROM product_order_codes WHERE product_id=$1`, [id]),
     db.query(`SELECT segment_no, parameter, option_code, option_label FROM product_order_code_segments WHERE product_id=$1 ORDER BY segment_no`, [id]),
