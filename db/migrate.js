@@ -23,7 +23,11 @@
 // for the specific migration(s) you need instead (each one there is
 // idempotent / IF NOT EXISTS, safe to re-run).
 
+<<<<<<< HEAD
 require('dotenv').config();
+=======
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+>>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');

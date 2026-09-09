@@ -44,13 +44,14 @@ function ConfidenceDot({ value }) {
 // ---------------------------------------------------------------------------
 // Upload panel
 // ---------------------------------------------------------------------------
-function UploadPanel({ categories, onUploaded, onCategoryCreated }) {
+function UploadPanel({ categories, onUploaded, onCategoryCreated, onSelectUpload }) {
   const [file, setFile] = useState(null);
   const [categoryId, setCategoryId] = useState('');
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCat, setNewCat] = useState({ id: '', label: '', unit: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [justUploaded, setJustUploaded] = useState(null); // filename of the last successful upload, shown briefly
 
   async function handleCreateCategory() {
     if (!newCat.id || !newCat.label) {
@@ -74,15 +75,49 @@ function UploadPanel({ categories, onUploaded, onCategoryCreated }) {
       setError('Choose a PDF first.');
       return;
     }
+    const uploadedName = file.name;
     setBusy(true);
     setError(null);
+    setJustUploaded(null);
     try {
       const result = await api.uploadFile(file, categoryId || null);
-      onUploaded(result);
       setFile(null);
-      document.getElementById('file-input').value = '';
+      const input = document.getElementById('file-input');
+      if (input) input.value = '';
+
+      if (result.deduped) {
+        // The server recognized this exact file (by content hash) as one
+        // already on record — it did NOT create a new row. Say so plainly
+        // instead of a generic "uploaded" message, and jump straight to the
+        // existing row so the admin can see its current status.
+        setJustUploaded(null);
+        setError(
+          `This exact file was already uploaded before (status: "${result.status}", ` +
+          `${new Date(result.uploaded_at).toLocaleString()}) — no new entry was created. ` +
+          `Opening the existing record below.` +
+          (result.status === 'rejected'
+            ? ' It was previously rejected — re-upload only works for a genuinely different file; to retry this one, edit and re-run its draft, or delete/rename the source PDF if you meant to submit a revised version.'
+            : '')
+        );
+        onSelectUpload?.(result.id);
+      } else {
+        setJustUploaded(uploadedName);
+        onSelectUpload?.(result.id);
+      }
+
+      // The upload itself is done at this point — refresh the list
+      // regardless of whether it's a dedup or a genuine new row, so a
+      // slow/failed refresh never looks like "nothing happened".
+      try {
+        await onUploaded(result);
+      } catch (refreshErr) {
+        setError(
+          (result.deduped ? '' : `Uploaded "${uploadedName}" successfully, but `) +
+          `the uploads list failed to refresh: ${refreshErr.message}. Reload the page to see it.`
+        );
+      }
     } catch (e) {
-      setError(e.message);
+      setError(`Upload failed: ${e.message}`);
     } finally {
       setBusy(false);
     }
@@ -133,6 +168,11 @@ function UploadPanel({ categories, onUploaded, onCategoryCreated }) {
       )}
 
       {error && <div className="error-box">{error}</div>}
+      {justUploaded && !error && (
+        <div className="hint" style={{ color: '#1f7a4d', fontWeight: 600 }}>
+          ✓ Uploaded "{justUploaded}" — check the table below.
+        </div>
+      )}
       <p className="hint">
         If you don't pick a category, the file is still parsed and stored — you'll fill the product form manually
         (or pick a category and click "Run AI draft" later from the review panel).
@@ -315,6 +355,24 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
     }
   }
 
+  // Rejecting an upload used to be a dead end — the only way back was
+  // uploading a byte-different file, since the upload-time dedup check
+  // blocks re-uploading the identical PDF. This undoes it, putting the
+  // upload back into the normal review flow.
+  async function handleReopen() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.reopen(uploadId);
+      load();
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const confidence = upload.confidence_json || {};
   const canPublish = form.id && form.family && categoryOverride;
 
@@ -341,8 +399,9 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
           ))}
         </select>
         <button className="secondary-btn" onClick={handleRunDraft} disabled={busy}>
-          {upload.extracted_json ? 'Re-run AI draft' : 'Run AI draft'}
+          {busy ? 'Drafting…' : upload.extracted_json ? 'Re-run AI draft' : 'Run AI draft'}
         </button>
+        {busy && <span className="hint" style={{ marginLeft: 8 }}>Running locally — can take up to ~2 minutes, longer on the first call while the model loads.</span>}
       </div>
 
       {upload.extraction_provider && <p className="hint">Drafted by: {upload.extraction_provider}</p>}
@@ -414,7 +473,11 @@ function ReviewPanel({ uploadId, categories, onChanged }) {
 
       <div className="review-footer">
         <button className="secondary-btn" onClick={handleSave} disabled={busy}>Save draft</button>
-        <button className="danger-btn" onClick={handleReject} disabled={busy}>Reject</button>
+        {upload.status === 'rejected' ? (
+          <button className="secondary-btn" onClick={handleReopen} disabled={busy}>Reopen</button>
+        ) : (
+          <button className="danger-btn" onClick={handleReject} disabled={busy}>Reject</button>
+        )}
         <button className="primary-btn" onClick={handlePublish} disabled={busy || !canPublish}>
           Publish product
         </button>
@@ -431,14 +494,26 @@ export default function CatalogueManager() {
   const [categories, setCategories] = useState([]);
   const [uploads, setUploads] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [listError, setListError] = useState(null);
 
+  // Returns a promise so callers (e.g. the upload flow) can tell whether the
+  // refresh actually succeeded, instead of this failing invisibly.
   const refreshUploads = useCallback(() => {
-    api.getUploads().then(setUploads).catch(console.error);
+    return api.getUploads()
+      .then((data) => {
+        setUploads(data);
+        setListError(null);
+      })
+      .catch((e) => {
+        console.error(e);
+        setListError(e.message || 'Could not load the uploads list.');
+        throw e;
+      });
   }, []);
 
   useEffect(() => {
     api.getCategories().then(setCategories).catch(console.error);
-    refreshUploads();
+    refreshUploads().catch(() => {});
   }, [refreshUploads]);
 
   return (
@@ -455,7 +530,17 @@ export default function CatalogueManager() {
         categories={categories}
         onCategoryCreated={(c) => setCategories((cats) => [...cats, c])}
         onUploaded={() => refreshUploads()}
+        onSelectUpload={setSelectedId}
       />
+
+      {listError && (
+        <div className="error-box" style={{ marginBottom: 12 }}>
+          Couldn't load the uploads list: {listError}. Is the backend server running and reachable?
+          <button className="link-btn" style={{ marginLeft: 8 }} onClick={() => refreshUploads().catch(() => {})}>
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="split">
         <UploadsTable uploads={uploads} selectedId={selectedId} onSelect={setSelectedId} />

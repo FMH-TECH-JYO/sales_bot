@@ -9,7 +9,7 @@
 // what refreshes those; see publishCatalogue() in
 // catalogueUploadsController.js).
 
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const { Client } = require('pg');
 const { chunkText } = require('../server/src/services/chunkDatasheet');
 

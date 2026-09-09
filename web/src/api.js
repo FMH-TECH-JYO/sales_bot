@@ -117,5 +117,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     }),
+  reopen: (id) =>
+    request(`/catalogue-uploads/${id}/reopen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }),
   fileUrl: (id) => `${BASE_URL}/catalogue-uploads/${id}/file`,
 };

@@ -1,5 +1,6 @@
 // db/seed.js
 // Run with: node db/seed.js
+<<<<<<< HEAD
 // Loads categories + the 29-product baseline catalogue into Postgres, AND
 // registers each of those products in `catalogue_uploads` (status='published')
 // so the Catalogue Manager admin screen shows the full catalogue, not just
@@ -12,6 +13,12 @@
 // existence check before creating each catalogue_uploads row).
 
 require('dotenv').config();
+=======
+// Loads categories + the 29-product baseline catalogue into Postgres.
+// Idempotent: safe to re-run (uses ON CONFLICT DO UPDATE / DO NOTHING).
+
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+>>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
@@ -37,9 +44,12 @@ async function main() {
 
   // --- products (+ children) ---
   let syntheticIdCounter = 1;
+<<<<<<< HEAD
   let uploadsCreated = 0;
   let uploadsSkipped = 0;
 
+=======
+>>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
   for (const p of seed.products) {
     // two temp_switch entries in the seed have model:'—' (no catalogue code) — give them a stable synthetic id
     const id = p.model && p.model !== '—'
@@ -107,6 +117,7 @@ async function main() {
         );
       }
     }
+<<<<<<< HEAD
 
     // --- register this product with the Catalogue Manager ---
     // Without this, the baseline catalogue only exists in `products` and never
@@ -151,3 +162,12 @@ async function main() {
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
+=======
+  }
+
+  console.log('Seed complete.');
+  await client.end();
+}
+
+main().catch(err => { console.error(err); process.exit(1); });
+>>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1

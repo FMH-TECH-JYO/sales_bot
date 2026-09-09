@@ -8,7 +8,11 @@
 // applying files under db/migrations/ one at a time when upgrading an
 // existing database that already has data in it.
 
+<<<<<<< HEAD
 require('dotenv').config();
+=======
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+>>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
 const { Client } = require('pg');
 const fs = require('fs');
 
