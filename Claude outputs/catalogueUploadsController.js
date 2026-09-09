@@ -293,30 +293,6 @@ async function rejectCatalogue(req, res) {
   res.json(rows[0]);
 }
 
-// POST /catalogue-uploads/:id/reopen — undo a reject (or just re-open a
-// parsed/drafted upload for another look). There was previously no way back
-// from "rejected" other than uploading a byte-different file, which the
-// upload-time dedup-by-hash check actively blocks for the identical PDF —
-// so a rejected-by-mistake (or "let's actually use this one after all")
-// catalogue had no recovery path. This just clears the rejected status back
-// to whatever review state its data already supports, so the normal
-// review -> publish flow can pick it up again.
-async function reopenUpload(req, res) {
-  const { rows } = await db.query(`SELECT * FROM catalogue_uploads WHERE id = $1`, [req.params.id]);
-  if (!rows.length) return res.status(404).json({ error: 'Not found' });
-  const upload = rows[0];
-  if (upload.status !== 'rejected') {
-    return res.status(400).json({ error: `Only a rejected upload can be reopened (current status: "${upload.status}").` });
-  }
-  const nextStatus = upload.extracted_json ? 'drafted' : (upload.raw_text ? 'parsed' : 'uploaded');
-  const updated = await db.query(
-    `UPDATE catalogue_uploads SET status=$1, reviewed_by=NULL, reviewed_at=NULL WHERE id=$2 RETURNING *`,
-    [nextStatus, upload.id]
-  );
-  await exportAfterUpload(upload.id);
-  res.json(updated.rows[0]);
-}
-
 // GET /catalogue-uploads/:id/file — view the original uploaded PDF (before it's published)
 async function viewCatalogueFile(req, res) {
   const { rows } = await db.query(`SELECT stored_file_url, original_filename FROM catalogue_uploads WHERE id = $1`, [req.params.id]);
@@ -334,5 +310,5 @@ async function viewCatalogueFile(req, res) {
 }
 
 module.exports = {
-  uploadCatalogue, listCatalogueUploads, getCatalogueUpload, updateDraft, retryDraft, publishCatalogue, rejectCatalogue, reopenUpload, viewCatalogueFile,
+  uploadCatalogue, listCatalogueUploads, getCatalogueUpload, updateDraft, retryDraft, publishCatalogue, rejectCatalogue, viewCatalogueFile,
 };

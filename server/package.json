@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "db:migrate": "psql \"$DATABASE_URL\" -f ../db/schema.sql",
+    "db:migrate": "node ../db/migrate.js",
     "db:seed": "node ../db/seed.js"
   },
   "dependencies": {

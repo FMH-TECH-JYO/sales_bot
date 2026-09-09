@@ -3,7 +3,7 @@
 // Loads categories + the 29-product baseline catalogue into Postgres.
 // Idempotent: safe to re-run (uses ON CONFLICT DO UPDATE / DO NOTHING).
 
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');

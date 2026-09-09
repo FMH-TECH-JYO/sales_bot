@@ -18,7 +18,7 @@
 // to anywhere in the app, but that's the actual blast radius, so don't run
 // this against a database you're relying on for enquiry-tracking history.
 
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');

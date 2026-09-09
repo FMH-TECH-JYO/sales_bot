@@ -14,5 +14,6 @@ router.patch('/:id', asyncHandler(ctrl.updateDraft));
 router.post('/:id/retry-draft', asyncHandler(ctrl.retryDraft));
 router.post('/:id/publish', asyncHandler(ctrl.publishCatalogue));
 router.post('/:id/reject', asyncHandler(ctrl.rejectCatalogue));
+router.post('/:id/reopen', asyncHandler(ctrl.reopenUpload));
 
 module.exports = router;
