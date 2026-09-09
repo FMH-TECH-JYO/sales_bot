@@ -1,22 +1,10 @@
 {
-  "name": "forbes-marshall-platform",
+  "name": "fm-platform-db",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "server",
-    "db",
-    "web"
-  ],
-  "scripts": {
-    "db:migrate": "node db/migrate.js",
-    "db:migrate-file": "node db/runSql.js",
-    "db:seed": "node db/seed.js",
-    "db:export-catalogue": "node db/exportCatalogue.js",
-    "db:import-catalogue": "node db/importCatalogue.js",
-    "db:backfill-chunks": "node db/backfillDatasheetChunks.js",
-    "dev:server": "npm run dev --workspace=server"
-  },
+  "main": "seed.js",
   "dependencies": {
-    "jspdf": "^4.2.1"
+    "dotenv": "^16.4.5",
+    "pg": "^8.12.0"
   }
 }

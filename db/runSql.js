@@ -1,38 +1,37 @@
 // db/runSql.js
-// Run with: node db/runSql.js <path-to-sql-file>   (or: npm run db:migrate-file -- <path>)
+// Run with: npm run db:migrate-file -- db/migrations/00X_whatever.sql
 //
-// Cross-platform way to execute any one .sql file against DATABASE_URL —
-// use this instead of `psql "$DATABASE_URL" -f <file>`, whose $VAR syntax
-// only expands on a POSIX shell and silently fails on Windows (see the
-// comment at the top of db/migrate.js for the full story). Mainly meant for
-// applying files under db/migrations/ one at a time when upgrading an
-// existing database that already has data in it.
+// Escape hatch for executing ONE .sql file against DATABASE_URL by hand.
+// Cross-platform replacement for `psql "$DATABASE_URL" -f <file>`, whose
+// $VAR syntax only expands on a POSIX shell and silently does the wrong
+// thing on Windows (see the comment at the top of db/migrate.js).
+//
+// You normally don't need this: `npm run db:migrate` now tracks what has
+// been applied in the schema_migrations table and runs pending migrations
+// itself. Use this only for ad-hoc SQL that isn't a numbered migration.
+//
+// NOTE: this file previously sat in git with unresolved merge conflict
+// markers, which made it a Node SyntaxError. Resolved: env loading now goes
+// through config/env.js like everything else.
 
-<<<<<<< HEAD
-require('dotenv').config();
-=======
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
->>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
+const { assertDatabaseUrl } = require('../config/env');
 const { Client } = require('pg');
 const fs = require('fs');
 
 async function main() {
   const file = process.argv[2];
   if (!file) {
-    console.error('Usage: node db/runSql.js <path-to-sql-file>');
+    console.error('Usage: npm run db:migrate-file -- <path-to-sql-file>');
     process.exit(1);
   }
   if (!fs.existsSync(file)) {
     console.error(`No such file: ${file}`);
     process.exit(1);
   }
-  if (!process.env.DATABASE_URL) {
-    console.error('DATABASE_URL is not set. Copy .env.example to .env in the repo root and fill in your Postgres connection string first.');
-    process.exit(1);
-  }
 
+  const connectionString = assertDatabaseUrl();
   const sql = fs.readFileSync(file, 'utf8');
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({ connectionString });
   await client.connect();
   try {
     await client.query(sql);
@@ -42,4 +41,7 @@ async function main() {
   }
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  if (err.code !== 'ENV_MISSING_DATABASE_URL') console.error(err.message || err);
+  process.exit(1);
+});

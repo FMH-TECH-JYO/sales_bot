@@ -1,7 +1,12 @@
 node_modules/
 .env
 *.log
+*.tmp
 .DS_Store
+
+# Safety copies importCatalogue.js writes before it truncates anything.
+# Local recovery only — never committed.
+db/.backups/
 
 # server/uploads/ (admin-uploaded catalogue PDFs) is INTENTIONALLY committed,
 # not ignored — see db/exportCatalogue.js / db/importCatalogue.js. This is a
@@ -10,3 +15,7 @@ node_modules/
 # rows do (via the export/import scripts) — otherwise a `git pull` on
 # another machine has product records with no matching datasheet file, or a
 # fresh Postgres with no catalogue at all. See DEPLOY.md.
+#
+# server/server/uploads/ is NOT a second storage location — it is the folder
+# the old localStorage.js path bug created. Nothing should ever be written
+# there again; see the comment at the top of server/src/storage/localStorage.js.

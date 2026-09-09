@@ -1,30 +1,31 @@
 // db/seed.js
-// Run with: node db/seed.js
-<<<<<<< HEAD
+// Run with: npm run db:seed
+//
 // Loads categories + the 29-product baseline catalogue into Postgres, AND
 // registers each of those products in `catalogue_uploads` (status='published')
 // so the Catalogue Manager admin screen shows the full catalogue, not just
-// items uploaded through the "upload a PDF" flow. This is what makes the
-// catalogue list consistent for everyone: anyone who pulls this repo, spins
-// up Postgres, and runs this one script gets the exact same products AND the
-// exact same Catalogue Manager list — not just whatever happens to be in one
-// person's local database.
-// Idempotent: safe to re-run (uses ON CONFLICT DO UPDATE / DO NOTHING, and a
-// existence check before creating each catalogue_uploads row).
+// items uploaded through the "upload a PDF" flow.
+//
+// Idempotent: safe to re-run. Parent rows use ON CONFLICT DO UPDATE; child
+// rows (deviations, order codes, code segments, range tables) have no unique
+// key to conflict on, so they are deleted and rewritten per product — the old
+// version plain-INSERTed them, which silently multiplied every deviation and
+// order-code row each time anyone re-ran the seed.
+//
+// NOTE: this file previously sat in git with three unresolved merge conflict
+// blocks (`<<<<<<< HEAD`), which made it a Node SyntaxError — `npm run db:seed`
+// crashed before touching Postgres, so a freshly cloned repo could never get
+// its baseline catalogue. Resolved in favour of the catalogue_uploads-aware
+// version; env loading now goes through config/env.js.
 
-require('dotenv').config();
-=======
-// Loads categories + the 29-product baseline catalogue into Postgres.
-// Idempotent: safe to re-run (uses ON CONFLICT DO UPDATE / DO NOTHING).
-
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
->>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
+const { assertDatabaseUrl } = require('../config/env');
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
 async function main() {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const connectionString = assertDatabaseUrl();
+  const client = new Client({ connectionString });
   await client.connect();
 
   const seedPath = path.join(__dirname, 'products_seed.json');
@@ -44,12 +45,9 @@ async function main() {
 
   // --- products (+ children) ---
   let syntheticIdCounter = 1;
-<<<<<<< HEAD
   let uploadsCreated = 0;
   let uploadsSkipped = 0;
 
-=======
->>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
   for (const p of seed.products) {
     // two temp_switch entries in the seed have model:'—' (no catalogue code) — give them a stable synthetic id
     const id = p.model && p.model !== '—'
@@ -87,6 +85,14 @@ async function main() {
         [id, label, value]
       );
     }
+
+    // These four have no natural unique key, so re-running the seed would
+    // otherwise append a second (third, fourth...) copy of every row.
+    await client.query('DELETE FROM product_deviations WHERE product_id = $1', [id]);
+    await client.query('DELETE FROM product_order_code_segments WHERE product_id = $1', [id]);
+    await client.query('DELETE FROM product_order_codes WHERE product_id = $1', [id]);
+    await client.query('DELETE FROM product_range_tables WHERE product_id = $1', [id]);
+
     for (const d of p.deviations || []) {
       await client.query(
         `INSERT INTO product_deviations (product_id, text, type) VALUES ($1,$2,$3)`,
@@ -117,7 +123,6 @@ async function main() {
         );
       }
     }
-<<<<<<< HEAD
 
     // --- register this product with the Catalogue Manager ---
     // Without this, the baseline catalogue only exists in `products` and never
@@ -161,13 +166,11 @@ async function main() {
   await client.end();
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
-=======
-  }
-
-  console.log('Seed complete.');
-  await client.end();
+if (require.main === module) {
+  main().catch((err) => {
+    if (err.code !== 'ENV_MISSING_DATABASE_URL') console.error(err);
+    process.exit(1);
+  });
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
->>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
+module.exports = { main };

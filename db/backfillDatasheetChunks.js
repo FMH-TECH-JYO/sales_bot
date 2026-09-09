@@ -9,12 +9,12 @@
 // what refreshes those; see publishCatalogue() in
 // catalogueUploadsController.js).
 
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+const { assertDatabaseUrl } = require('../config/env');
 const { Client } = require('pg');
 const { chunkText } = require('../server/src/services/chunkDatasheet');
 
 async function main() {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({ connectionString: assertDatabaseUrl() });
   await client.connect();
 
   try {

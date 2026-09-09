@@ -1,107 +1,131 @@
-# Moving this app to another machine
+# Running this app on another machine
 
-`git push` / `git pull` only ever moves **code**. Two things this app needs
-to actually work are NOT code, so they don't travel with git automatically
-unless you do the extra step below:
-
-1. **Your catalogue database rows** (products, categories, extra specs,
-   the chunked RAG text used for matching, admin upload/review history) —
-   these live in Postgres, and git has no idea Postgres exists.
-2. **The actual datasheet PDF files** admins have uploaded — these live on
-   disk under `server/uploads/`, and (unlike most projects) this repo
-   commits them directly to git rather than ignoring them, since there's
-   no shared/cloud file storage configured. Keep them checked in.
-
-If you skip step 1 below, the app runs but shows **no catalogue products**
-(a fresh database only has whatever `npm run db:seed` puts there — the
-baseline 29-product demo seed, not your real published catalogue). If you
-skip committing `server/uploads/`, products will exist in the database but
-**"View Catalogue" / datasheet download will fail** with a file-not-found
-error, because the database row points at a PDF that isn't there.
-
-## On the machine you publish catalogue changes from
-
-`db/catalogue_export.json` is now written **automatically** every time you
-publish a catalogue in the admin console (see `runExport()` called at the
-end of `publishCatalogue()` in `catalogueUploadsController.js`) — you don't
-need to remember to run the export script by hand anymore. All that's left
-after publishing is to commit and push:
+## The short version
 
 ```bash
-git add db/catalogue_export.json server/uploads/
-git commit -m "Update catalogue: <what changed>"
+git clone <repo>          # or: git pull
+npm install
+docker compose up -d      # starts Postgres
+npm run setup             # env + schema + catalogue data, idempotent
+npm run dev:server        # http://localhost:4000
+npm run dev:web           # http://localhost:5173
+```
+
+`npm run setup` is safe to run any time, including after every pull. It works
+out what the database needs and does only that.
+
+---
+
+## Why this used to fail (keep this section — it explains the guards)
+
+Three separate faults produced the same two symptoms — *"SASL:
+SCRAM-SERVER-FIRST-MESSAGE: client password must be a string"* and *"the
+database is empty again"* — and fixing one never fixed the others.
+
+**1. `.env` is gitignored, so a clone never has one.**
+`server/src/config/db.js` read `DATABASE_URL` from a `.env` that didn't exist,
+got `undefined`, and handed it to `pg`, which fell back to its defaults with no
+password. The SASL message is `pg` complaining about a missing password — it
+never mentions the actual problem. Nothing you fixed locally could travel,
+because the fix *was* the untracked file.
+→ `config/env.js` now creates `.env` from `.env.example` on first run, and
+`assertDatabaseUrl()` fails with an instruction instead of that message.
+
+**2. Three db scripts were committed with unresolved merge conflicts.**
+`db/migrate.js`, `db/seed.js` and `db/runSql.js` each contained `<<<<<<< HEAD`
+markers, which makes them Node syntax errors. `npm run db:migrate` and
+`npm run db:seed` crashed before touching Postgres on *every* clone, so the
+schema was never created and the baseline catalogue never loaded.
+→ Resolved. Also `git config merge.conflictstyle diff3` and check
+`git diff --check` before committing; a conflict marker in a committed file is
+what turned a one-machine problem into an everyone-machine problem.
+
+**3. An empty export was silently overwriting the real catalogue.**
+This is the one that actually destroyed data:
+
+- `catalogueUploadsController.js` calls `runExport()` after every upload,
+  publish and reject, best-effort, errors swallowed.
+- `runExport()` overwrote `db/catalogue_export.json` with whatever the current
+  database held. On a machine whose database was empty — a fresh clone, or one
+  just truncated by an import — that wrote 13 empty arrays over the real
+  export.
+- That file got committed and pushed.
+- `db/importCatalogue.js` ran `TRUNCATE ... CASCADE` *before* checking whether
+  the dump had any rows, so pulling it wiped the machine that still had data.
+
+One round trip, catalogue gone everywhere, no error anywhere.
+→ Three guards, all in code, none of them optional:
+  - `exportCatalogue.js` **refuses** to replace a non-empty export with an
+    empty one (`--force` to override).
+  - `syncCatalogueToGit.js` **refuses** to commit an empty export.
+  - `importCatalogue.js` **refuses** to import an empty export, and writes
+    `db/.backups/catalogue_before_import_<timestamp>.json` before it truncates
+    anything, so any import is undoable.
+
+**Also fixed along the way:** `LOCAL_UPLOAD_DIR=./server/uploads` was being
+resolved against `server/`, producing `server/server/uploads`. A machine with a
+`.env` stored PDFs in a folder nothing reads; a machine without one used the
+fallback and got the right folder. Paths now resolve against the repo root.
+`db/package.json` had also been overwritten with a copy of the root
+`package.json`, which breaks `npm install`'s workspace resolution.
+
+---
+
+## Publishing catalogue changes (the machine you upload on)
+
+`db/catalogue_export.json` is written automatically at the end of every
+publish. To share it:
+
+```bash
+npm run catalogue:sync    # export + git add + git commit (refuses if empty)
 git push
 ```
 
-(`npm run db:export-catalogue` still exists if you ever need to force a
-refresh outside of publishing — e.g. after editing the database directly —
-but the normal publish-a-catalogue flow no longer needs it.)
+`npm run catalogue:sync` stops with a clear error rather than committing an
+empty catalogue. If it does stop, you are either pointed at the wrong database
+(check `DATABASE_URL` in `.env`) or nothing has been published yet.
 
-## On the machine you're deploying/running the app on
-
-This is the "I pulled the code onto another system, I shouldn't have to
-re-upload all the catalogues again" step — running these three commands is
-the whole thing, no re-uploading through the admin UI required:
+## Receiving catalogue changes (any other machine)
 
 ```bash
 git pull
 npm install
-npm run db:migrate                 # only needed once, or after a schema change
-npm run db:import-catalogue        # replaces this DB's catalogue tables with the export
+npm run setup
 ```
 
-After that, every product, every chunk of RAG text, and every original PDF
-(from `server/uploads/`, pulled with the rest of the code) is exactly as it
-was on the machine you published from — nothing needs re-uploading. If a
-product's "download datasheet" ever 404s with a "missing from this server's
-storage" message after a pull, it means `server/uploads/` didn't actually
-come along with that pull (check `git status`/`git log` on that folder) —
-that's the one thing importing the database alone can't fix, since the PDF
-bytes themselves only travel via git, not via `catalogue_export.json`.
+`setup` runs pending migrations, then:
 
-## What happens on every catalogue upload (the RAG ingestion pipeline)
+| `catalogue_export.json` | this database | what happens |
+|---|---|---|
+| has rows | anything | import it (after writing a backup) |
+| empty | no products | seed the 29-product baseline |
+| empty | has products | **leave the database alone** |
 
-Uploading a PDF in the admin console does the full pipeline immediately,
-not just at publish time:
+That last row is the safeguard. An empty export can no longer destroy a
+populated database, whatever order anyone runs things in.
 
-1. The PDF is saved to storage (`server/uploads/`) and its text extracted.
-2. That text is **chunked** (`server/src/services/chunkDatasheet.js` —
-   deterministic paragraph-aware splitting, no LLM) and stored in
-   `catalogue_upload_chunks`, one row per chunk.
-3. If a category was picked, the LLM drafts the structured product fields
-   for review, same as before.
+If a datasheet download 404s after a pull, `server/uploads/` didn't come along
+with that pull — the PDF bytes travel via git, not via `catalogue_export.json`.
 
-On **publish**, those chunks are copied over keyed to the final product id
-(`product_datasheet_chunks`), fully replacing any previous chunks for that
-product — this is what `internalDatasheetLookup.js` actually searches
-(per-chunk full-text ranking) when matching finds a spec an enquiry asked
-about that isn't in any structured field. The original PDF itself is never
-touched or replaced by this — it stays in `server/uploads/` and every
-published version is kept in `product_catalogue_files` — chunking only
-affects the searchable text copy used for matching.
+`db:import-catalogue` is a full **replace**, not a merge. If two people publish
+catalogue changes on different machines, only one of you should be the source
+of truth, or you will overwrite each other.
 
-Both chunk tables are included in `db:export-catalogue` /
-`db:import-catalogue`, so the RAG index travels with the rest of the
-catalogue across machines — you don't need to re-chunk anything after a
-`git pull` + `db:import-catalogue`. The one exception is a database that
-had catalogues published **before** this chunking pipeline existed: run
-`npm run db:backfill-chunks` once to chunk their existing `datasheet_text`
-retroactively (matching still works without it in the meantime — lookups
-just fall back to whole-document search for those specific products until
-they're backfilled or re-published).
+---
 
-`db:import-catalogue` is a full **replace**, not a merge — it's meant for
-"make this machine match the one I publish from," not for combining
-catalogues edited independently on two machines. If two people are
-publishing catalogue changes on different machines, only one of you should
-run `db:export-catalogue` before each push, or you'll overwrite each
-other's work on import.
+## The actual long-term fix
 
-## Longer-term
+Everything above is machinery for moving a database around in git, which is
+not what git is for. The real fix is to stop having two copies of the data:
 
-The actual fix for a real production deployment is to stop duplicating
-data across machines at all: one Postgres instance and one uploads folder
-that every environment reads from (a real DB host + object storage like
-S3, swapped in via `STORAGE_DRIVER` in `server/src/storage/`). The
-export/import scripts here are a stand-in for that until this app has a
-real server to live on.
+- **One Postgres** both machines point at — a cloud instance (Neon, Supabase,
+  RDS; free tiers are enough for this) or a box on the internal network. Change
+  `DATABASE_URL` in `.env` on both machines and the entire export/import/sync
+  flow becomes unnecessary. Nothing else in the code changes.
+- **One file store** — `server/src/storage/dbStorage.js` is currently an empty
+  stub. Implementing it (PDF bytes in a `bytea` column) or an `s3Storage.js`
+  means `STORAGE_DRIVER` in `.env` is the only thing that changes, and PDFs
+  stop needing to be committed to git.
+
+Do that and `npm run setup` on a new machine becomes `npm install` plus a
+connection string.

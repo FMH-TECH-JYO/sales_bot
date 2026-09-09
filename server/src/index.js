@@ -1,4 +1,10 @@
 // server/src/index.js
+//
+// config/env.js must be the FIRST require in the process: it resolves the
+// repo-root .env (creating it from .env.example on a fresh clone) before any
+// module that reads process.env at import time is loaded.
+require('../../config/env');
+
 const express = require('express');
 const cors = require('cors');
 const db = require('./config/db');
@@ -44,7 +50,10 @@ if (fs.existsSync(webDist)) {
   app.use(express.static(webDist));
   // SPA fallback: any non-API GET that isn't a static file goes to index.html
   // so React Router's client-side routes (e.g. /chat, /matching) work on refresh.
-  app.get(/^(?!\/(products|categories|catalogue-uploads|health)).*/, (req, res) => {
+  // enquiries|offers are listed here too — they were missing, so a GET to
+  // either would have been swallowed by the SPA fallback rather than 404ing
+  // as an API route, once web/dist existed.
+  app.get(/^(?!\/(products|categories|catalogue-uploads|enquiries|offers|health)).*/, (req, res) => {
     res.sendFile(path.join(webDist, 'index.html'));
   });
 }

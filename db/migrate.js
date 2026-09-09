@@ -1,72 +1,114 @@
 // db/migrate.js
-// Run with: node db/migrate.js   (or: npm run db:migrate)
+// Run with: npm run db:migrate
 //
-// Creates the full schema (db/schema.sql) against DATABASE_URL. Deliberately
-// plain Node + pg, NOT a shell `psql "$DATABASE_URL" -f db/schema.sql` call —
-// that syntax only expands $VAR on a POSIX shell (bash/zsh on macOS/Linux).
-// On Windows, npm runs package.json scripts through cmd.exe by default,
-// which has no idea what $DATABASE_URL means — it gets passed to psql as
-// the 15-character literal string "$DATABASE_URL", the connection fails,
-// and schema.sql never actually runs. Depending on your terminal you may
-// not even see a loud error for it, which is exactly how a database can end
-// up with zero tables ("relation ... does not exist" on everything) while
-// db:migrate silently "succeeded." This script reads DATABASE_URL from .env
-// itself (same as every other db/*.js script here), so it behaves
-// identically on Windows, macOS, and Linux, and doesn't need psql installed
-// or on PATH at all.
+// Idempotent. Safe to run on a fresh database, on a database that is already
+// set up, and twice in a row. This replaces the old version, which was:
+//   - checked into git WITH UNRESOLVED MERGE CONFLICT MARKERS (`<<<<<<< HEAD`),
+//     making the file a Node SyntaxError, so `npm run db:migrate` crashed on
+//     every fresh clone before it ever touched Postgres — which is why a
+//     pulled repo ended up with zero tables and an "empty database";
+//   - deliberately non-idempotent (schema.sql is plain CREATE TABLE), so on a
+//     database that DID exist it errored out and told you to hand-pick files
+//     from db/migrations/ yourself.
 //
-// Meant for a FRESH/EMPTY database — schema.sql is plain CREATE TABLE (no
-// IF NOT EXISTS), so running this against a database that already has these
-// tables will error on purpose rather than silently no-op. If you're
-// upgrading an EXISTING database that was already set up from an older
-// version of schema.sql, use `npm run db:migrate-file -- db/migrations/<file>.sql`
-// for the specific migration(s) you need instead (each one there is
-// idempotent / IF NOT EXISTS, safe to re-run).
+// What it does now:
+//   1. Creates the schema_migrations bookkeeping table if absent.
+//   2. If the schema has never been installed (no `products` table), runs
+//      db/schema.sql once, then records every file in db/migrations/ as
+//      already applied — schema.sql is the current shape, it already
+//      includes them.
+//   3. Otherwise, applies any db/migrations/*.sql not yet recorded, in
+//      filename order, each in its own transaction.
+//
+// Deliberately plain Node + pg rather than `psql "$DATABASE_URL" -f ...`:
+// that $VAR syntax only expands on a POSIX shell. On Windows npm runs
+// scripts through cmd.exe, which passes the literal string "$DATABASE_URL"
+// to psql — the connection fails, the schema is never created, and nothing
+// obvious tells you so. This works identically on Windows, macOS and Linux
+// and does not need psql installed at all.
 
-<<<<<<< HEAD
-require('dotenv').config();
-=======
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
->>>>>>> 107589b7c5281159be5ce7ce3d51c8842156d0b1
+const { assertDatabaseUrl } = require('../config/env');
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
+
+function migrationFiles() {
+  if (!fs.existsSync(MIGRATIONS_DIR)) return [];
+  return fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
+}
+
+async function tableExists(client, name) {
+  const { rows } = await client.query('SELECT to_regclass($1) AS reg', [`public.${name}`]);
+  return rows[0].reg !== null;
+}
 
 async function main() {
-  if (!process.env.DATABASE_URL) {
-    console.error(
-      'DATABASE_URL is not set. Copy .env.example to .env in the repo root ' +
-      'and fill in your Postgres connection string first.'
-    );
-    process.exit(1);
-  }
-
-  const sql = fs.readFileSync(SCHEMA_PATH, 'utf8');
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const connectionString = assertDatabaseUrl();
+  const client = new Client({ connectionString });
   await client.connect();
+
   try {
-    await client.query(sql);
-    console.log('Schema created successfully from db/schema.sql.');
-    console.log('Next: npm run db:seed (demo data) or npm run db:import-catalogue (your real catalogue export).');
-  } catch (err) {
-    if (/already exists/i.test(err.message)) {
-      console.error(
-        `\n${err.message}\n\n` +
-        `This looks like some of these tables already exist — db/migrate.js (schema.sql) is meant for a\n` +
-        `fresh/empty database, not for upgrading one that's already set up. If you're upgrading an existing\n` +
-        `database to pick up a newer feature, run the specific file you need instead, e.g.:\n` +
-        `  npm run db:migrate-file -- db/migrations/003_add_datasheet_chunks.sql\n` +
-        `(see db/migrations/ for what each one does).`
-      );
-    } else {
-      console.error(err);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        filename    TEXT PRIMARY KEY,
+        applied_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+
+    const freshDatabase = !(await tableExists(client, 'products'));
+
+    if (freshDatabase) {
+      console.log('No schema found — installing db/schema.sql...');
+      await client.query('BEGIN');
+      await client.query(fs.readFileSync(SCHEMA_PATH, 'utf8'));
+      for (const file of migrationFiles()) {
+        await client.query(
+          'INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING',
+          [file]
+        );
+      }
+      await client.query('COMMIT');
+      console.log(`Schema installed. ${migrationFiles().length} migration(s) marked as already included.`);
+      console.log('Next: npm run db:import-catalogue (real catalogue) or npm run db:seed (29-product demo baseline).');
+      return;
     }
-    process.exit(1);
+
+    const { rows: applied } = await client.query('SELECT filename FROM schema_migrations');
+    const done = new Set(applied.map((r) => r.filename));
+    const pending = migrationFiles().filter((f) => !done.has(f));
+
+    if (pending.length === 0) {
+      console.log('Database schema is already up to date — nothing to apply.');
+      return;
+    }
+
+    for (const file of pending) {
+      const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+      console.log(`Applying ${file}...`);
+      await client.query('BEGIN');
+      try {
+        await client.query(sql);
+        await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw new Error(`Migration ${file} failed and was rolled back: ${err.message}`);
+      }
+    }
+    console.log(`Applied ${pending.length} migration(s). Schema is up to date.`);
   } finally {
     await client.end();
   }
 }
 
-main();
+if (require.main === module) {
+  main().catch((err) => {
+    if (err.code !== 'ENV_MISSING_DATABASE_URL') console.error(err.message || err);
+    process.exit(1);
+  });
+}
+
+module.exports = { main };

@@ -8,6 +8,7 @@
     "web"
   ],
   "scripts": {
+    "setup": "node db/setup.js",
     "db:migrate": "node db/migrate.js",
     "db:migrate-file": "node db/runSql.js",
     "db:seed": "node db/seed.js",
@@ -15,9 +16,12 @@
     "db:import-catalogue": "node db/importCatalogue.js",
     "db:backfill-chunks": "node db/backfillDatasheetChunks.js",
     "catalogue:sync": "node db/syncCatalogueToGit.js",
-    "dev:server": "npm run dev --workspace=server"
+    "dev:server": "npm run dev --workspace=server",
+    "dev:web": "npm run dev --workspace=web"
   },
   "dependencies": {
-    "jspdf": "^4.2.1"
+    "dotenv": "^16.4.5",
+    "jspdf": "^4.2.1",
+    "pg": "^8.12.0"
   }
 }
