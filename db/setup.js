@@ -22,7 +22,6 @@
 const { assertDatabaseUrl, ENV_PATH } = require('../config/env');
 const { Client } = require('pg');
 const fs = require('fs');
-const path = require('path');
 const { countRows, OUT_PATH } = require('./exportCatalogue');
 
 async function checkConnection(connectionString) {

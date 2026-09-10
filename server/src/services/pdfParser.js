@@ -17,6 +17,7 @@ async function extractText(buffer) {
   // Postgres TEXT/JSONB columns reject null bytes (0x00) outright — some PDF
   // extractors emit them for certain embedded-font/ligature edge cases.
   // Strip them here, once, so every caller downstream can assume clean text.
+  // eslint-disable-next-line no-control-regex -- matching a control character is the point
   const text = (data.text || '').replace(/\u0000/g, '').trim();
 
   // Heuristic: a native-text PDF yields a healthy amount of text per page.

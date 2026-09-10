@@ -17,11 +17,17 @@ require('../../../config/env');
 
 const driver = process.env.STORAGE_DRIVER || 'local';
 
+// NOTE: the storage interface is now treated as ASYNC by every caller. The
+// local driver stays synchronous and `await` passes its values straight
+// through; the db driver returns real promises. Any future driver (s3Storage)
+// only has to export save/getBuffer/exists with the same shape.
 let impl;
 if (driver === 'local') {
   impl = require('./localStorage');
+} else if (driver === 'db') {
+  impl = require('./dbStorage');
 } else {
-  throw new Error(`Unknown STORAGE_DRIVER "${driver}". Add server/src/storage/${driver}Storage.js and wire it in here.`);
+  throw new Error(`Unknown STORAGE_DRIVER "${driver}". Valid values: "local", "db". To add another, write server/src/storage/${driver}Storage.js exporting save/getBuffer/exists and wire it in here.`);
 }
 
 module.exports = impl;

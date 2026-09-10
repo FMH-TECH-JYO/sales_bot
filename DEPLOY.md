@@ -129,3 +129,115 @@ not what git is for. The real fix is to stop having two copies of the data:
 
 Do that and `npm run setup` on a new machine becomes `npm install` plus a
 connection string.
+
+---
+
+# Production deployment
+
+Everything above is the development workflow. This section is what changes when
+real users are on it.
+
+## First: create an administrator
+
+There is **no default account and no default password.** A well-known
+admin/admin on every deployment is the most reliable way for an application to
+be taken over, so the first account is created deliberately:
+
+```bash
+npm run user:create -- --email you@forbesmarshall.com --name "Your Name" --role admin --generate
+```
+
+`--generate` prints a strong random password once and never again. Without it
+you are prompted, and the password is not echoed. The password is never taken
+as a command-line argument on purpose: `argv` is visible to every other process
+on the machine through `ps`, and it lands in your shell history.
+
+Re-running for an existing address resets that account's password and signs out
+all of its sessions, so it doubles as "I locked myself out". After that, further
+accounts are created from the admin UI or `POST /auth/users`.
+
+Roles are `sales_engineer`, `manager`, `admin`. There is no hierarchy in the
+code — each route lists every role that may call it — because implicit
+hierarchies are where privilege-escalation bugs hide.
+
+## Environment
+
+Beyond `DATABASE_URL`, production needs:
+
+| Variable | Set it to | Why |
+|---|---|---|
+| `NODE_ENV` | `production` | Turns on Secure cookies and disables the rate-limiter escape hatch. |
+| `CORS_ORIGINS` | *empty*, or the site serving the frontend | Empty is correct when Express serves `web/dist` itself — there is then no cross-origin call to permit. Set it only if the frontend is deployed separately. |
+| `TRUST_PROXY` | `1` behind nginx or a platform router; **empty otherwise** | Without it, `req.ip` is the proxy and the rate limiter treats every user as one client. With it and *no* proxy in front, a client can spoof `X-Forwarded-For` and escape rate limiting entirely. |
+| `STORAGE_DRIVER` | `db` | `local` puts datasheets on one instance's disk: lost when the container is replaced, invisible to any other replica. This is the "database is empty again" problem in a new costume. |
+| `COOKIE_SAMESITE` | leave unset | Only needed if the app and the API are on different sites, and then it must be `none`, which requires Secure. |
+
+`server/src/preflight.js` checks these at startup. A setting that would leave a
+protection off, or that no browser can work with, refuses to start. A missing
+feature dependency warns loudly and lets the rest of the app run.
+
+## Migrations are a deploy STEP, not a container start-up command
+
+```bash
+npm run db:migrate     # once, before rolling out the new image
+```
+
+The Dockerfile deliberately does not run them. Running migrations on container
+start means every replica races the same DDL on every deploy, and it puts a
+schema change inside the same command as a restart — so a bad migration takes
+the service down instead of failing a deploy step.
+
+## Building and running
+
+```bash
+docker build -t fm-platform:latest .
+docker run -p 4000:4000 --env-file .env.production fm-platform:latest
+```
+
+One image serves both the API and the built React app on one port. That is the
+reason the session cookie can be `SameSite=Lax` and `CORS_ORIGINS` can stay
+empty: same origin, so neither problem exists.
+
+`/health` is liveness — it never touches the database, so a database outage does
+not make an orchestrator kill a healthy process and restart it into the same
+outage. `/ready` is readiness — it *does* check the database and returns 503
+when it cannot, so a load balancer routes around the instance instead.
+
+## Known, accepted risks
+
+**`xlsx` (SheetJS) 0.18.5 — HIGH severity, no fix available on npm.**
+Prototype pollution (GHSA-4r6h-8v6p-xvw6) and ReDoS (GHSA-5pgg-2g8v-p4x9). The
+patched 0.20.x releases are published only to the vendor's own CDN, not to npm.
+
+*Mitigation in place:* every spreadsheet and PDF is parsed inside a worker
+thread with a 30-second timeout (`server/src/services/documentWorker.js`).
+Pollution lands in an isolate that is destroyed when the parse ends, and a
+regex sent exponential burns one worker rather than freezing the server. This
+contains the advisories; it does not fix them.
+
+*To actually fix it,* from a network that can reach the vendor:
+
+```bash
+npm install --workspace=server https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+```
+
+Then re-run `npm test` — the spreadsheet tests are the check that the upgrade
+did not change how a real RFQ is read.
+
+**Offer templates are not in the repository.** `server/templates/offers/`
+contains only a README, so `GET /offers/fields/:productId` answers *"No offer
+template uploaded yet"* for every product and no offer can be generated. See
+that README for what has to go there and the commercial-content check to do
+first. The startup preflight warns about this on every boot until it is fixed.
+
+## What is NOT covered
+
+* **Backups.** Nothing in this repo backs the database up. `db/exportCatalogue.js`
+  snapshots the *catalogue* to JSON; it does not touch enquiries, offers or
+  users. Configure backups at the database provider (Neon has point-in-time
+  restore) before real enquiries are in there.
+* **Secret rotation.** There is no key-rotation story because there are no
+  application-level secrets yet — sessions are random tokens in a table. If
+  that changes, this section needs to as well.
+* **Log aggregation.** Logs go to stdout. Fine for one container; if you run
+  several, ship them somewhere before you need to read them.

@@ -28,23 +28,14 @@
 // Every block keeps its original row range so the UI/audit trail can point
 // back to exactly which spreadsheet rows produced which match result.
 
-const XLSX = require('xlsx');
+// Nothing here reads the workbook directly any more: header/table detection
+// moved to parseSpreadsheetTable.js. The XLSX import, the ID/PRODUCT column
+// regexes and the cellsToText/isBlankRow helpers that went with the old
+// sheet_to_json approach were left behind by that move and are removed here —
+// dead code that still looks authoritative is worse than no code, because the
+// next person to touch this file has to work out which of the two column
+// detectors is the live one.
 const { parseSpreadsheetTable, pickKnownFields } = require('./parseSpreadsheetTable');
-const { extractText: extractPdfText } = require('./pdfParser');
-
-const ID_COLUMN_RE = /^(s\.?\s?no\.?|sr\.?\s?no\.?|item\s?no\.?|enq(uiry)?\s?no\.?|line\s?no\.?|#)$/i;
-const PRODUCT_COLUMN_RE = /^(product|item|description|equipment|instrument|requirement|particulars|specification)/i;
-
-function cellsToText(row) {
-  return Object.entries(row)
-    .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
-    .map(([k, v]) => `${k}: ${String(v).trim()}`)
-    .join('\n');
-}
-
-function isBlankRow(row) {
-  return Object.values(row).every((v) => v === null || v === undefined || String(v).trim() === '');
-}
 
 /**
  * @param {Buffer} buffer
@@ -123,7 +114,12 @@ function isPdfMime(mimetype) { return mimetype === 'application/pdf'; }
  */
 async function parseEnquiryFile(file) {
   if (isExcelFile(file)) {
-    const { blocks, sheetName, columns, title, diagnostic } = parseExcelEnquiries(file.buffer);
+    // Parsed in a worker thread, not here. The xlsx package has an unfixed
+    // high-severity prototype-pollution advisory and an unfixed ReDoS
+    // advisory, and this buffer came from outside the company. See
+    // documentWorker.js for what the isolation does and does not buy.
+    const { parseExcelInWorker } = require('./documentWorker');
+    const { blocks, sheetName, columns, title, diagnostic } = await parseExcelInWorker(file.buffer);
     if (blocks.length === 0) {
       return {
         kind: 'excel',
@@ -137,7 +133,10 @@ async function parseEnquiryFile(file) {
     return { kind: 'excel', blocks, sheetName, columns, title };
   }
   if (isPdfFile(file)) {
-    const { text, quality } = await extractPdfText(file.buffer);
+    // Also off the event loop: pdf-parse is synchronous and CPU-heavy, so a
+    // large scan used to stall every other request for its duration.
+    const { extractPdfTextInWorker } = require('./documentWorker');
+    const { text, quality } = await extractPdfTextInWorker(file.buffer);
     if (quality === 'likely_scanned') {
       return { kind: 'pdf', text, warning: `"${file.originalname}" looks scanned/image-based — little or no text could be extracted. OCR isn't supported yet.` };
     }

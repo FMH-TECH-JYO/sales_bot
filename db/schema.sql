@@ -141,13 +141,65 @@ CREATE TABLE customers (
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- IMPORTANT — the contract between this file and db/migrations/:
+-- db/migrate.js installs THIS FILE on a fresh database and then marks every
+-- migration as already applied, on the stated assumption that schema.sql is
+-- the current shape. So anything a migration adds must ALSO be added here, or
+-- a brand-new deployment gets the migration recorded as done without ever
+-- running it, and the objects simply do not exist.
+--
+-- That is not hypothetical: migration 007 was written and this file was not
+-- updated, so a fresh database came up with `007_auth.sql` recorded as applied,
+-- no sessions table, and no password_hash column — an application that cannot
+-- authenticate anyone, on a database that reports itself fully migrated.
+-- server/test/schemaConsistency.test.js now fails when the two drift apart.
+
 CREATE TABLE users (
-  id           SERIAL PRIMARY KEY,        -- sales engineers / reviewers
-  name         TEXT NOT NULL,
-  email        TEXT UNIQUE NOT NULL,
-  role         TEXT NOT NULL DEFAULT 'sales_engineer',  -- 'sales_engineer' | 'manager' | 'admin'
-  active       BOOLEAN DEFAULT TRUE
+  id            SERIAL PRIMARY KEY,       -- sales engineers / reviewers
+  name          TEXT NOT NULL,
+  email         TEXT UNIQUE NOT NULL,
+  role          TEXT NOT NULL DEFAULT 'sales_engineer',  -- 'sales_engineer' | 'manager' | 'admin'
+  active        BOOLEAN DEFAULT TRUE,
+
+  -- 007_auth.sql. Nullable on purpose: a row with no hash CANNOT sign in, which
+  -- is the correct state for accounts created before authentication existed.
+  -- Set one with `npm run user:create`. There is deliberately no default
+  -- account and no default password.
+  password_hash TEXT,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_login_at TIMESTAMP,
+
+  -- Failed-login throttling lives on the row, not in memory, so it survives a
+  -- restart and is shared across processes. An attacker who can restart the
+  -- server must not get a fresh allowance of guesses.
+  failed_logins INTEGER NOT NULL DEFAULT 0,
+  locked_until  TIMESTAMP
 );
+
+-- Email is compared case-insensitively everywhere, so 'Admin@fm.com' and
+-- 'admin@fm.com' must not be able to exist as two separate logins.
+CREATE UNIQUE INDEX users_email_lower_idx ON users (LOWER(email));
+
+-- 007_auth.sql. Opaque server-side sessions rather than JWTs: a JWT cannot be
+-- revoked before it expires without a server-side deny list, which costs the
+-- same as this table and buys nothing. Twenty to thirty people on one Postgres
+-- do not need stateless auth; they need someone's access to end immediately
+-- when they leave. Only the SHA-256 of the token is stored, so a database dump
+-- contains nothing replayable.
+CREATE TABLE sessions (
+  id           SERIAL PRIMARY KEY,
+  token_hash   TEXT NOT NULL UNIQUE,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  issued_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at   TIMESTAMP NOT NULL,
+  last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revoked_at   TIMESTAMP,                 -- set on logout; the row is kept for audit
+  user_agent   TEXT,
+  ip           TEXT
+);
+
+CREATE INDEX sessions_user_idx    ON sessions (user_id);
+CREATE INDEX sessions_expires_idx ON sessions (expires_at);
 
 CREATE TABLE enquiries (
   id                SERIAL PRIMARY KEY,
@@ -414,3 +466,20 @@ ALTER TABLE offers ALTER COLUMN enquiry_id DROP NOT NULL;
 -- from db/migrations/005_spec_table_order.sql
 ALTER TABLE product_extra_spec ADD COLUMN IF NOT EXISTS sort_order INTEGER;
 CREATE INDEX IF NOT EXISTS idx_product_extra_spec_order ON product_extra_spec(product_id, sort_order);
+CREATE TABLE IF NOT EXISTS catalogue_blobs (
+  storage_key       TEXT PRIMARY KEY,          -- == stored_file_url / file_url
+  sha256            TEXT NOT NULL,
+  bytes             BYTEA NOT NULL,
+  byte_size         INTEGER NOT NULL,
+  mime_type         TEXT NOT NULL DEFAULT 'application/pdf',
+  original_filename TEXT,
+  uploaded_by       INTEGER REFERENCES users(id),
+  uploaded_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalogue_blobs_sha ON catalogue_blobs(sha256);
+
+COMMENT ON TABLE catalogue_blobs IS
+  'Datasheet/catalogue file bytes. storage_key matches catalogue_uploads.stored_file_url '
+  'and product_catalogue_files.file_url exactly, so the storage driver can be swapped '
+  'without touching any referencing row. See server/src/storage/dbStorage.js.';

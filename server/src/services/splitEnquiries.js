@@ -19,7 +19,10 @@ const { extractStructured } = require('./llmClient');
 
 // Matches a line that opens a new numbered/lettered item, e.g.
 // "1.", "1)", "Item 1:", "Enquiry 2 -", "(a)", "Sr No 3."
-const NUMBERED_ITEM_RE = /^\s*(?:item|enquiry|sr\.?\s?no\.?|s\.?\s?no\.?)?\s*[\(\[]?(\d{1,3}|[a-zA-Z])[\)\].:\-]\s+/i;
+// Inside a character class ( and [ need no escape, and a trailing - is a
+// literal hyphen. The escaped forms worked but read as though they were doing
+// something; written plainly, the class is obviously "one of ) ] . : -".
+const NUMBERED_ITEM_RE = /^\s*(?:item|enquiry|sr\.?\s?no\.?|s\.?\s?no\.?)?\s*[([]?(\d{1,3}|[a-zA-Z])[)\].:-]\s+/i;
 
 /**
  * Deterministic pass: split on blank-line-separated paragraphs, then check

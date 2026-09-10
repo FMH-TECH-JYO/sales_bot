@@ -45,6 +45,14 @@ async function generate(req, res) {
     config = {}, discountPct = 0, currency = null, isExport = false, terms = null,
   } = req.body;
 
+  // productId arrives in the JSON body, so a route-level validator cannot see
+  // it. products.id is TEXT — the model code — so this checks the shape of a
+  // code, not that it is a number.
+  const { PRODUCT_CODE_RE } = require('../middleware/validateParams');
+  if (typeof productId !== 'string' || !PRODUCT_CODE_RE.test(productId)) {
+    return res.status(400).json({ error: 'productId must be a product code, e.g. "FMLG-BM".' });
+  }
+
   const { rows } = await db.query('SELECT * FROM products WHERE id = $1', [productId]);
   const product = rows[0];
   if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -68,6 +76,7 @@ async function generate(req, res) {
     await persistOffer({
       enquiryId, lineItemId, product, customerName, qty, tagNo, rangeCode,
       config, discountPct, currency, isExport, terms, extraSpecs, fields,
+      userId: req.user.id,
     });
   } catch (err) {
     console.error('Failed to persist offer (document still delivered):', err);
@@ -87,6 +96,9 @@ async function nextOfferNo(client) {
 async function persistOffer({
   enquiryId, lineItemId, product, customerName, qty, tagNo, rangeCode,
   config, discountPct, currency, isExport, terms, extraSpecs, fields,
+  // Who issued it. Comes from the session, never from the request body — an
+  // offer's author is an audit fact, not something the caller gets to assert.
+  userId = null,
 }) {
   const price = await priceFor(product.id, config, rangeCode);
   const unitPrice = price.unitPrice;              // null when unpriced — see computePrice.js
@@ -99,8 +111,8 @@ async function persistOffer({
 
     const { rows: offerRows } = await client.query(
       `INSERT INTO offers (enquiry_id, offer_no, version, customer_json, terms_json,
-                           status, currency, is_export)
-       VALUES ($1,$2,1,$3,$4,'generated',$5,$6)
+                           status, currency, is_export, created_by)
+       VALUES ($1,$2,1,$3,$4,'generated',$5,$6,$7)
        RETURNING id`,
       [
         enquiryId,
@@ -109,6 +121,7 @@ async function persistOffer({
         JSON.stringify(terms || {}),
         currency || price.currency || 'INR',
         !!isExport,
+        userId,
       ]
     );
     const offerId = offerRows[0].id;
@@ -135,8 +148,8 @@ async function persistOffer({
 
     await client.query(
       `INSERT INTO audit_log (entity_type, entity_id, actor, action, diff_json)
-       VALUES ('offer', $1, NULL, 'create', $2)`,
-      [String(offerId), JSON.stringify({ offerNo, productId: product.id, quantity, unitPrice, enquiryId, lineItemId })]
+       VALUES ('offer', $1, $2, 'create', $3)`,
+      [String(offerId), userId, JSON.stringify({ offerNo, productId: product.id, quantity, unitPrice, enquiryId, lineItemId })]
     );
 
     await client.query('COMMIT');

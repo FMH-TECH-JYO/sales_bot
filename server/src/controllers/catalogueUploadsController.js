@@ -11,7 +11,10 @@
 
 const db = require('../config/db');
 const storage = require('../storage');
-const { extractText } = require('../services/pdfParser');
+// Catalogue PDFs are admin-supplied rather than customer-supplied, but they
+// go through the same worker: pdf-parse is synchronous, and a 200-page
+// catalogue parsed on the event loop stalls every engineer mid-enquiry.
+const { extractPdfTextInWorker: extractText } = require('../services/documentWorker');
 const { extractProductDraft } = require('../services/extractProductDraft');
 const { chunkText } = require('../services/chunkDatasheet');
 const { runExport } = require('../../../db/exportCatalogue');
@@ -56,7 +59,7 @@ async function exportAfterUpload(uploadId) {
 async function uploadCatalogue(req, res) {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded (expected multipart field "file")' });
 
-  const { url, hash } = storage.save(req.file.buffer, req.file.originalname);
+  const { url, hash } = await storage.save(req.file.buffer, req.file.originalname, req.file.mimetype);
 
   const existing = await db.query(`SELECT * FROM catalogue_uploads WHERE file_hash = $1`, [hash]);
   if (existing.rows.length > 0) {
@@ -68,9 +71,9 @@ async function uploadCatalogue(req, res) {
 
   if (quality === 'likely_scanned') {
     const inserted = await db.query(
-      `INSERT INTO catalogue_uploads (original_filename, stored_file_url, file_hash, mime_type, category_id, status, raw_text)
-       VALUES ($1,$2,$3,$4,$5,'uploaded',$6) RETURNING *`,
-      [req.file.originalname, url, hash, req.file.mimetype, category_id, text]
+      `INSERT INTO catalogue_uploads (original_filename, stored_file_url, file_hash, mime_type, category_id, status, raw_text, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,'uploaded',$6,$7) RETURNING *`,
+      [req.file.originalname, url, hash, req.file.mimetype, category_id, text, req.user.id]
     );
     await chunkAndStoreUploadText(inserted.rows[0].id, text); // usually near-empty for scanned PDFs, but chunk whatever came through
     await exportAfterUpload(inserted.rows[0].id);
@@ -81,9 +84,9 @@ async function uploadCatalogue(req, res) {
   }
 
   const inserted = await db.query(
-    `INSERT INTO catalogue_uploads (original_filename, stored_file_url, file_hash, mime_type, category_id, status, raw_text)
-     VALUES ($1,$2,$3,$4,$5,'parsed',$6) RETURNING *`,
-    [req.file.originalname, url, hash, req.file.mimetype, category_id, text]
+    `INSERT INTO catalogue_uploads (original_filename, stored_file_url, file_hash, mime_type, category_id, status, raw_text, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5,'parsed',$6,$7) RETURNING *`,
+    [req.file.originalname, url, hash, req.file.mimetype, category_id, text, req.user.id]
   );
   let row = inserted.rows[0];
   await chunkAndStoreUploadText(row.id, text);
@@ -254,12 +257,12 @@ async function publishCatalogue(req, res) {
     );
     await client.query(
       `INSERT INTO product_catalogue_files (product_id, file_url, version, uploaded_by, is_current) VALUES ($1,$2,$3,$4,TRUE)`,
-      [p.id, upload.stored_file_url, fileRows[0].next_version, req.body.reviewed_by || null]
+      [p.id, upload.stored_file_url, fileRows[0].next_version, req.user.id]
     );
 
     await client.query(
       `UPDATE catalogue_uploads SET status='published', product_id=$1, published_at=CURRENT_TIMESTAMP, reviewed_by=$2, reviewed_at=CURRENT_TIMESTAMP WHERE id=$3`,
-      [p.id, req.body.reviewed_by || null, upload.id]
+      [p.id, req.user.id, upload.id]
     );
 
     await client.query('COMMIT');
@@ -290,7 +293,7 @@ async function publishCatalogue(req, res) {
 async function rejectCatalogue(req, res) {
   const { rows } = await db.query(
     `UPDATE catalogue_uploads SET status='rejected', reviewed_by=$1, reviewed_at=CURRENT_TIMESTAMP WHERE id=$2 RETURNING *`,
-    [req.body.reviewed_by || null, req.params.id]
+    [req.user.id, req.params.id]
   );
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
   await exportAfterUpload(rows[0].id);
@@ -325,13 +328,13 @@ async function reopenUpload(req, res) {
 async function viewCatalogueFile(req, res) {
   const { rows } = await db.query(`SELECT stored_file_url, original_filename FROM catalogue_uploads WHERE id = $1`, [req.params.id]);
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
-  if (!storage.exists(rows[0].stored_file_url)) {
+  if (!(await storage.exists(rows[0].stored_file_url))) {
     return res.status(404).json({
       error: `File "${rows[0].original_filename}" is missing from this server's storage (expected key ${rows[0].stored_file_url}). ` +
         `The upload record exists in the database, but the PDF isn't on disk — see DEPLOY.md's "moving this app to another machine" section.`,
     });
   }
-  const buffer = storage.getBuffer(rows[0].stored_file_url);
+  const buffer = await storage.getBuffer(rows[0].stored_file_url);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${rows[0].original_filename}"`);
   res.send(buffer);

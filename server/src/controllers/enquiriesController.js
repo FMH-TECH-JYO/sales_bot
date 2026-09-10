@@ -49,7 +49,7 @@ async function match(req, res) {
   let enquiryId = null;
   let persisted = true;
   try {
-    const saved = await persistEnquiry({ text, result, file: req.file, customerName });
+    const saved = await persistEnquiry({ text, result, file: req.file, customerName, userId: req.user.id });
     enquiryId = saved.enquiryId;
   } catch (err) {
     persisted = false;

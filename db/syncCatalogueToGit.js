@@ -18,7 +18,6 @@
 // committed by this script now.
 
 const { execSync } = require('child_process');
-const path = require('path');
 const { assertDatabaseUrl, REPO_ROOT } = require('../config/env');
 const { runExport } = require('./exportCatalogue');
 

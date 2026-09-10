@@ -31,13 +31,30 @@ const STATUS_LABEL = {
   not_requested: 'Not requested',
 };
 
+const VERDICT_LABEL = { match: '\u2713 Match', deviation: '\u26a0 Deviation', unclear: '? Not confirmed' };
+const VERDICT_COLOUR = {
+  match: 'var(--fm-success)',
+  deviation: 'var(--fm-warning)',
+  unclear: 'var(--fm-muted, #777)',
+};
+
 function RequestedVsActualRow({ row }) {
+  // `verdict` comes from compareAttributes.js, which compares every attribute
+  // the enquiry stated. `status` is the older six-fixed-column shape; keep
+  // reading it so an enquiry matched before this change still renders.
+  const verdict = row.verdict || null;
   return (
     <tr>
-      <td>{row.parameter}</td>
-      <td>{row.requested ?? '—'}</td>
-      <td>{row.actual ?? '—'}</td>
-      <td className={`rva-status rva-${row.status}`}>{STATUS_LABEL[row.status] || row.status}</td>
+      <td>{row.field ?? row.parameter}</td>
+      <td>{row.requested ?? '\u2014'}</td>
+      <td>{row.actual ?? '\u2014'}</td>
+      <td
+        className={verdict ? 'rva-status' : `rva-status rva-${row.status}`}
+        style={verdict ? { color: VERDICT_COLOUR[verdict], whiteSpace: 'nowrap' } : undefined}
+        title={row.note || ''}
+      >
+        {verdict ? VERDICT_LABEL[verdict] : (STATUS_LABEL[row.status] || row.status)}
+      </td>
     </tr>
   );
 }
@@ -132,6 +149,28 @@ export default function MatchingPage() {
 
         {item.warning && <div className="error-box">{item.warning}</div>}
 
+        {item.confidence && item.confidence.verdict !== 'reliable' && (
+          <div
+            className={item.confidence.verdict === 'unusable' ? 'error-box' : 'clarify-block panel'}
+            style={{ marginBottom: 16 }}
+          >
+            <h4 style={{ marginTop: 0 }}>
+              {item.confidence.verdict === 'unusable'
+                ? 'This enquiry could not be matched reliably'
+                : 'Treat this match with caution'}
+            </h4>
+            <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+              {item.confidence.reasons.map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+            {item.confidence.verdict === 'unusable' && (
+              <p style={{ marginBottom: 0, marginTop: 10 }}>
+                Rather than guess, nothing is being put forward as the match. Add the missing
+                requirements and run it again, or pick a product yourself from the catalogue.
+              </p>
+            )}
+          </div>
+        )}
+
         {item.clarificationsNeeded?.length > 0 && (
           <div className="clarify-block panel">
             <h4>🔎 Information needed to finalize the exact model</h4>
@@ -146,9 +185,20 @@ export default function MatchingPage() {
           </div>
         )}
 
-        {!hasResults ? (
+        {(!hasResults || item.confidence?.verdict === 'unusable') ? (
           <div className="panel empty-state" style={{ padding: 30 }}>
-            <p>No candidate products found for this enquiry.</p>
+            {!hasResults ? (
+              <p>No candidate products found for this enquiry.</p>
+            ) : (
+              <>
+                <p style={{ marginTop: 0 }}><strong>No match shown.</strong></p>
+                <p className="hint" style={{ maxWidth: '60ch', margin: '0 auto' }}>
+                  The scorer could not separate the candidates on what this enquiry states,
+                  so putting one forward with a percentage would be a guess. The reasons are
+                  listed above.
+                </p>
+              </>
+            )}
           </div>
         ) : (
         <div className="match-top">
@@ -191,6 +241,14 @@ export default function MatchingPage() {
               </div>
             </div>
 
+            {selected.attributeSummary && (
+              <p className="hint" style={{ margin: '10px 0 -4px' }}>
+                Compared {selected.requestedVsActual?.length ?? 0} stated requirement(s):{' '}
+                <strong style={{ color: 'var(--fm-success)' }}>{selected.attributeSummary.matched} matched</strong>,{' '}
+                <strong style={{ color: 'var(--fm-warning)' }}>{selected.attributeSummary.deviations} deviation(s)</strong>,{' '}
+                <strong>{selected.attributeSummary.unconfirmed} not confirmed</strong> by the datasheet.
+              </p>
+            )}
             {selected.requestedVsActual?.length > 0 && (
               <div className="rva-table-wrap">
                 <h4>Requested vs actual</h4>
@@ -268,7 +326,11 @@ export default function MatchingPage() {
                 <span className="catalogue-icon">📄</span>
                 <div className="catalogue-info">
                   <div className="catalogue-name">{p.model} — Datasheet</div>
-                  <div className="catalogue-meta">Not yet uploaded to the catalogue library</div>
+                  <div className="catalogue-meta">
+                    No datasheet on record. This product came from the baseline catalogue seed,
+                    so no PDF was ever stored for it — upload its datasheet in Catalogue Manager
+                    and publish it to make it viewable here.
+                  </div>
                 </div>
               </div>
             )}
@@ -298,7 +360,16 @@ export default function MatchingPage() {
         <div className="match-footer">
           <button className="secondary-btn" onClick={handleReset}>Reset</button>
           <button className="secondary-btn" onClick={handleEdit}>Edit</button>
-          <button className="primary-btn" onClick={handleProceed} disabled={!hasResults}>Proceed with Offer Generation</button>
+          <button
+            className="primary-btn"
+            onClick={handleProceed}
+            disabled={!hasResults || item.confidence?.canGenerateOffer === false}
+            title={item.confidence?.canGenerateOffer === false
+              ? 'Disabled: the match is not reliable enough to quote from'
+              : undefined}
+          >
+            Proceed with Offer Generation
+          </button>
         </div>
       </div>
     </div>

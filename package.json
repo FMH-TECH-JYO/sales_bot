@@ -17,7 +17,14 @@
     "db:backfill-chunks": "node db/backfillDatasheetChunks.js",
     "catalogue:sync": "node db/syncCatalogueToGit.js",
     "dev:server": "npm run dev --workspace=server",
-    "dev:web": "npm run dev --workspace=web"
+    "dev:web": "npm run dev --workspace=web",
+    "db:import-uploads": "node db/importUploadsToDb.js",
+    "user:create": "node db/createUser.js",
+    "test": "node --test --test-concurrency=1",
+    "test:coverage": "node --test --experimental-test-coverage --test-concurrency=1",
+    "lint": "eslint .",
+    "build": "npm run build --workspace=web",
+    "start": "node server/src/index.js"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
@@ -25,7 +32,15 @@
     "pg": "^8.23.0",
     "xlsx": "^0.18.5"
   },
-  "allowScripts": {
-    "esbuild@0.21.5": true
+  "engines": {
+    "node": ">=20.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0"
+  },
+  "overrides": {
+    "qs@<6.16.0": "^6.16.0"
   }
 }

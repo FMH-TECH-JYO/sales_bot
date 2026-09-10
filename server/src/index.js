@@ -1,79 +1,83 @@
 // server/src/index.js
 //
-// config/env.js must be the FIRST require in the process: it resolves the
-// repo-root .env (creating it from .env.example on a fresh clone) before any
-// module that reads process.env at import time is loaded.
-require('../../config/env');
+// Process entry point: takes the app built in app.js, listens on a port, and
+// owns everything that is a side effect of being a running process —
+// crash handling, the session-purge timer, graceful shutdown.
+//
+// config/env.js is required first (transitively, via app.js, which requires it
+// on its own first line) so the repo-root .env is resolved before any module
+// reads process.env at import time.
 
-const express = require('express');
-const cors = require('cors');
+const { app } = require('./app');
 const db = require('./config/db');
+const { purgeExpiredSessions } = require('./services/sessions');
+const { checkProductionPrerequisites } = require('./preflight');
 
-// Last-resort safety net — logs instead of silently crashing. Route-level
-// errors should never reach this (asyncHandler + the error middleware below
-// catch those); this is only for anything outside the request/response cycle.
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled promise rejection:', reason);
-});
-
-// web/ built files that npm run build --workspace=web produces
-const path = require('path');
-const webDist = path.join(__dirname, '..', '..', 'web', 'dist');
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// Health check — also proves the DB connection and confirms the seed ran.
-app.get('/health', async (req, res) => {
-  try {
-    const { rows } = await db.query('SELECT COUNT(*)::int AS product_count FROM products');
-    res.json({ status: 'ok', product_count: rows[0].product_count });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ status: 'error', message: err.message });
-  }
-});
-
-app.use('/products', require('./routes/products'));
-app.use('/categories', require('./routes/categories'));
-app.use('/catalogue-uploads', require('./routes/catalogueUploads'));
-app.use('/enquiries', require('./routes/enquiries'));
-app.use('/offers', require('./routes/offers'));
-
-// Serve the built React app (if it exists) from this same server/port, so
-// sharing the app is a single URL/tunnel instead of two. Falls back to the
-// friendly JSON root below when web/dist hasn't been built yet (normal dev
-// workflow of running Vite separately on :5173 still works either way).
-const fs = require('fs');
-if (fs.existsSync(webDist)) {
-  app.use(express.static(webDist));
-  // SPA fallback: any non-API GET that isn't a static file goes to index.html
-  // so React Router's client-side routes (e.g. /chat, /matching) work on refresh.
-  // enquiries|offers are listed here too — they were missing, so a GET to
-  // either would have been swallowed by the SPA fallback rather than 404ing
-  // as an API route, once web/dist existed.
-  app.get(/^(?!\/(products|categories|catalogue-uploads|enquiries|offers|health)).*/, (req, res) => {
-    res.sendFile(path.join(webDist, 'index.html'));
-  });
+// Configuration checks BEFORE the port is opened. A fatal finding here means
+// the process would run without a protection it is supposed to have, or in a
+// state where nothing can reach it — better to fail the deploy than to serve.
+const preflight = checkProductionPrerequisites();
+if (!preflight.ok) {
+  console.error('\nRefusing to start. Fix the FATAL items above.\n');
+  process.exit(1);
 }
 
-// Global error handler — MUST be registered last, after all routes.
-// Every async route is wrapped in asyncHandler, so any thrown/rejected
-// error lands here instead of crashing the process.
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
-});
-// Friendly root — otherwise hitting http://localhost:4000/ shows Express's
-// bare "Cannot GET /", which looks like a crash even when the server is fine.
-app.get('/', (req, res) => {
-  res.json({
-    service: 'fm-platform-server',
-    status: 'running',
-    try: ['/health', '/products', '/categories', '/catalogue-uploads', '/enquiries/match', '/offers'],
-  });
+// --- process-level safety ----------------------------------------------------
+// This used to log the rejection and carry on. That is worse than it sounds:
+// a process that has had an unhandled rejection is in an unknown state but is
+// still bound to :4000, so the next `npm run dev:server` fails with EADDRINUSE
+// against a server that no longer works — precisely the confusing failure seen
+// during development.
+//
+// Route errors never reach here (asyncHandler plus the error middleware in
+// app.js catch those), so anything that does is genuinely unexpected. Log it,
+// then exit non-zero and let the supervisor — systemd, Docker, the platform —
+// start a clean process. Never leave a half-dead server holding the port.
+function fatal(label) {
+  return (reason) => {
+    console.error(`${label}:`, reason);
+    // One tick for the log to flush, then leave.
+    setTimeout(() => process.exit(1), 100).unref();
+  };
+}
+process.on('unhandledRejection', fatal('Unhandled promise rejection'));
+process.on('uncaughtException', fatal('Uncaught exception'));
+
+const PORT = Number(process.env.PORT) || 4000;
+
+const server = app.listen(PORT, () => {
+  console.log(`FM platform server listening on :${PORT} (${process.env.NODE_ENV || 'development'})`);
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`FM platform server listening on :${PORT}`));
+// Expired sessions are cleaned up hourly rather than on every request.
+const purgeTimer = setInterval(() => {
+  purgeExpiredSessions().catch((err) => console.error('Session purge failed:', err.message));
+}, 60 * 60 * 1000);
+purgeTimer.unref();
+
+// --- graceful shutdown -------------------------------------------------------
+// Without this, stopping the container kills in-flight requests mid-response
+// and leaves Postgres connections to time out from the server side.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received — finishing in-flight requests…`);
+  server.close(async () => {
+    try {
+      await db.pool.end();
+    } catch (err) {
+      console.error('Error closing the database pool:', err.message);
+    }
+    process.exit(0);
+  });
+  // If something is wedged, do not hang the deployment forever.
+  setTimeout(() => {
+    console.error('Shutdown timed out after 10s — exiting anyway.');
+    process.exit(1);
+  }, 10_000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+module.exports = { app, server };

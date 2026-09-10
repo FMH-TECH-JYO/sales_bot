@@ -1,0 +1,28 @@
+# Keep the build context small and, more importantly, keep secrets and
+# machine-local state out of the image.
+
+.env
+.env.*
+!.env.example
+
+node_modules
+**/node_modules
+
+web/dist
+db/.backups
+
+.git
+.github
+.gitignore
+
+*.log
+*.tmp
+.DS_Store
+
+# Datasheet PDFs are committed to the repo for the local/dev workflow, but a
+# production image reads them from the database (STORAGE_DRIVER=db). Copying
+# them in would bloat the image with files it will not open.
+server/uploads
+
+# Tests do not ship. They need a database and they create and delete users.
+server/test

@@ -8,6 +8,7 @@
 // doesn't attempt to capture.
 
 const { CATEGORY_ALIASES } = require('./categoryAliases');
+const { readEnquiryAttributes } = require('./parseEngineeringShorthand');
 
 const HAZARD_TERMS = /\b(ATEX|Ex[\s-]?d|Ex[\s-]?ia|flameproof|flame[\s-]?proof|explosion[\s-]?proof|hazardous area|classified area|Zone\s?[0-2])\b/i;
 const SAFE_TERMS = /\b(weatherproof|weather[\s-]?proof|safe area)\b/i;
@@ -45,7 +46,28 @@ function parseEnquiryText(text) {
     if (/c$/i.test(m[2])) { tempMax = parseFloat(m[1]); break; }
   }
 
-  return { rawText: text, range, tempMax, hazardous, outputCandidates };
+  // Compressed shorthand ("10KG,100 DEGGC,PC-1\"ASA 150#,TRM-SS316") carries the
+  // same requirements as prose but matches none of the patterns above. Read it
+  // too, and let it fill gaps the prose patterns left empty.
+  //
+  // Design pressure is deliberately NOT folded into `range`: the pressure a
+  // level gauge is BUILT for is not the range it MEASURES, and treating one as
+  // the other would score every candidate against the wrong number.
+  const shorthand = readEnquiryAttributes(text);
+  if (tempMax == null && shorthand.tempMax != null) tempMax = shorthand.tempMax;
+
+  return {
+    rawText: text,
+    range,
+    tempMax,
+    hazardous,
+    outputCandidates,
+    connectionRaw: shorthand.connection || null,
+    moc: shorthand.materials.length ? shorthand.materials.join(', ') : null,
+    designPressure: shorthand.designPressure || null,
+    instrumentStyle: shorthand.instrumentStyle || null,
+    shorthand,
+  };
 }
 
 /**

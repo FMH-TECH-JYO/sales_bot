@@ -111,16 +111,89 @@ function findTitle(grid, headerStart) {
   return null;
 }
 
+// A header band is at most three rows. Real sheets stack a group header over a
+// sub-header, occasionally over a unit row; nothing legitimate goes deeper, and
+// an unbounded band can swallow the entire table.
+const MAX_HEADER_ROWS = 3;
+
+/**
+ * Is row `i` a CONTINUATION of the header band that started at `start`, rather
+ * than the first row of data?
+ *
+ * numericFraction alone cannot answer this. It was the only test, and it fails
+ * on exactly the sheets this application receives most: an RFQ whose columns
+ * are Tag / MOC / Connection / Description is almost entirely text, so its
+ * first data row looks no more numeric than the header above it and was
+ * absorbed into the band. The table was then "header rows 0-2 with no data
+ * below", and the whole sheet came back as unreadable.
+ *
+ * Two structural facts separate a sub-header from a data row. BOTH must hold:
+ *
+ *   1. It is SPARSER than the row that opened the band. A sub-header names the
+ *      sub-columns of grouped headers — "QTY / TAG / TYPE" under "PT", "MIN /
+ *      MAX" under "PRESSURE IN KG/CM2" — and leaves the rest alone, whereas a
+ *      data row fills the columns the header defined.
+ *   2. Its FILL PATTERN differs from the row after it. Data arrives in runs of
+ *      similarly-shaped rows; a header does not repeat.
+ *
+ * Verified against the reference RFQ (P19): its sub-header fills 14 cells under
+ * a 15-cell header and is followed by a blank spacer, so both hold and the band
+ * stays two rows. On a plain four-column sheet the first data row fills all
+ * four and looks exactly like the row beneath it, so both fail and the band
+ * correctly ends at the header.
+ *
+ * Note what is NOT used: "every cell sits under a populated header cell". That
+ * sounds right and is wrong — real sheets put ungrouped column names ("OLD
+ * TAG", "REMARK", "CONNECTION") on the second row with nothing above them,
+ * and requiring a parent threw the P19 sub-header away.
+ *
+ * Known limit: a data table whose rows are RAGGED (different optional columns
+ * populated per row) can satisfy both tests on its first row. In practice the
+ * numericFraction check above catches those, but a text-only ragged table
+ * could still lose its first row into the header band. The MAX_HEADER_ROWS cap
+ * bounds the damage to that one row rather than the whole sheet.
+ */
+function fillPattern(row) {
+  return (row || []).map((c) => (c !== null && c !== undefined && String(c).trim() !== '' ? '1' : '0')).join('');
+}
+
+function isHeaderContinuation(grid, start, i) {
+  const row = grid[i] || [];
+  if (nonEmptyCount(row) >= nonEmptyCount(grid[start] || [])) return false;
+  return fillPattern(row) !== fillPattern(grid[i + 1] || []);
+}
+
 function findHeaderBand(grid) {
   let best = null;
   for (let i = 0; i < Math.min(grid.length, 30); i++) {
     const count = nonEmptyCount(grid[i]);
-    if (count < 3) continue;                        // spacer
-    if (isTitleRow(grid[i])) continue;              // merged banner, not a header
-    if (numericFraction(grid[i]) > 0.3) break;      // already into data
-    if (best === null) best = { start: i, end: i };
-    else if (i === best.end + 1) best.end = i;      // second header row
-    else break;
+
+    if (best === null) {
+      // Opening a band: demand real substance, so a stray note or a page
+      // number never becomes the header of the table.
+      if (count < 3) continue;                      // spacer
+      if (isTitleRow(grid[i])) continue;            // merged banner, not a header
+      if (numericFraction(grid[i]) > 0.3) break;    // already into data
+      best = { start: i, end: i };
+      continue;
+    }
+
+    // Continuing a band. The threshold is 1, not 3.
+    //
+    // It used to be 3 here as well, and that silently threw away sub-header
+    // rows: "Tag | Process | Design" over "· | Pressure | Temperature" has
+    // only TWO populated cells in its second row, so the row was skipped as a
+    // spacer, "Pressure" and "Temperature" never reached the column labels,
+    // and the row was then counted as a dropped footer. A sub-header is sparse
+    // BY DEFINITION — that is what makes it a sub-header — so requiring it to
+    // be dense is self-defeating. isHeaderContinuation does the real work.
+    if (count === 0) break;                                   // blank row: data starts after it
+    if (i !== best.end + 1) break;                            // gap: data started
+    if (best.end - best.start + 1 >= MAX_HEADER_ROWS) break;  // band is long enough
+    if (numericFraction(grid[i]) > 0.3) break;                // already into data
+    if (!isHeaderContinuation(grid, best.start, i)) break;    // data, not a sub-header
+
+    best.end = i;
   }
   return best;
 }

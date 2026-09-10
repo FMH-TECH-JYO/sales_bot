@@ -19,8 +19,10 @@
 //     the time this runs — refusing to show the engineer their results because
 //     a write failed would be a worse outcome than a missing history row. The
 //     caller logs and continues; see enquiriesController.js.
-//   * uploaded_by is null until authentication exists. The column is nullable
-//     on purpose so persistence can land before auth does.
+//   * uploaded_by is the signed-in user, passed in by the controller from
+//     req.user.id. It stays nullable because rows written before migration 007
+//     (when there was no authentication at all) genuinely have no author, and
+//     backfilling them with a guess would be worse than an honest NULL.
 
 const db = require('../config/db');
 
@@ -52,11 +54,11 @@ function detectSourceQuality(sourceType, rawText) {
  * Best-effort: a storage failure must not lose the enquiry record itself.
  * @returns {string|null} storage key for enquiries.source_file_url
  */
-function storeSourceFile(file) {
+async function storeSourceFile(file) {
   if (!file || !file.buffer) return null;
   try {
     const storage = require('../storage');
-    const { url } = storage.save(file.buffer, file.originalname, file.mimetype);
+    const { url } = await storage.save(file.buffer, file.originalname, file.mimetype);
     return url;
   } catch (err) {
     console.error('Could not store enquiry source file (enquiry still saved):', err.message);
@@ -77,7 +79,7 @@ async function persistEnquiry({ text, result, file, userId = null, customerName 
   const sourceType = detectSourceType(file);
   const rawText = [text, ...(result.items || []).map((i) => i.text)].filter(Boolean).join('\n\n');
   const sourceQuality = detectSourceQuality(sourceType, rawText);
-  const sourceFileUrl = storeSourceFile(file);
+  const sourceFileUrl = await storeSourceFile(file);
 
   const client = await db.pool.connect();
   try {

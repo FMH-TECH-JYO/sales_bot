@@ -1,11 +1,22 @@
 // web/src/context/AppContext.jsx
 //
 // One context for the two things that need to survive page navigation:
-// (1) who's logged in (admin/user — client-side only, no real auth backend
-// yet, role persisted to localStorage so a refresh doesn't log you out), and
-// (2) the enquiry currently being worked on (text, attachments, match
-// results, selected product, offer draft) as it flows through
-// Chat -> Matching -> Offer.
+// (1) who's signed in, and (2) the enquiry currently being worked on (text,
+// attachments, match results, selected product, offer draft) as it flows
+// through Chat -> Matching -> Offer.
+//
+// Authentication used to live here as `localStorage.fm_role`, written by a
+// button on the login screen. That was not authentication: the server never
+// looked at it, so editing one string in devtools granted admin, and every API
+// route was open to anyone who could reach the port regardless.
+//
+// Now the session is an HttpOnly cookie the server sets, and this context
+// holds only a CACHE of who the server says you are. The cache is never
+// trusted for access decisions — every guarded call is checked again on the
+// server — it exists so the UI can render the right navigation without
+// flickering. On mount we ask /auth/me; `authState` distinguishes 'loading'
+// (we have not asked yet — render nothing rather than bouncing a signed-in
+// user to the login screen) from 'anonymous' and 'authenticated'.
 //
 // Chat history stores a FULL SNAPSHOT of each enquiry (not just its title),
 // so reopening a past conversation actually restores it, per the
@@ -14,10 +25,10 @@
 // matching page they'd reached, not a blank screen.
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { api, setUnauthorizedHandler } from '../api';
 
 const AppCtx = createContext(null);
 
-const ROLE_KEY = 'fm_role';
 const HISTORY_KEY = 'fm_chat_history';
 
 function loadHistory() {
@@ -30,7 +41,9 @@ function loadHistory() {
 }
 
 export function AppProvider({ children }) {
-  const [role, setRole] = useState(() => localStorage.getItem(ROLE_KEY) || null);
+  const [user, setUser] = useState(null);              // { id, name, email, role } from the server
+  const [authState, setAuthState] = useState('loading'); // 'loading' | 'anonymous' | 'authenticated'
+  const role = user?.role || null;
   // Persisted to localStorage so chat history survives a page refresh or
   // reopening the app later, not just navigation within one session.
   const [chatHistory, setChatHistory] = useState(loadHistory); // [{id, title, createdAt, snapshot: {text, attachments, parsed, results, selectedIndex, messages}}]
@@ -45,17 +58,65 @@ export function AppProvider({ children }) {
     }
   }, [chatHistory]);
 
-  const login = useCallback((r) => {
-    localStorage.setItem(ROLE_KEY, r);
-    setRole(r);
+  /** Clear the local cache of who is signed in. Does NOT call the server —
+   * used both by logout() below and by the 401 handler, where the session is
+   * already gone server-side and calling /auth/logout would just 401 again. */
+  const clearSession = useCallback(() => {
+    setUser(null);
+    setAuthState('anonymous');
+    setEnquiry(null);   // an enquiry in progress belongs to the person who started it
+    setOffer(null);
+
+    // Chat history goes too. It lives in localStorage so it survives a refresh,
+    // which also means it survives a DIFFERENT PERSON signing in on the same
+    // machine — and these are shared machines in a sales office. Every entry is
+    // a full snapshot of a customer's enquiry, so leaving it behind hands the
+    // next user the previous user's customers. The server-side history at
+    // /history is the durable record; this cache is per-session by design.
+    setChatHistory([]);
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+    } catch (err) {
+      console.error('Could not clear local chat history:', err);
+    }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem(ROLE_KEY);
-    setRole(null);
-    setEnquiry(null);
-    setOffer(null);
+  // A 401 from ANY call means the session ended — it expired, an admin revoked
+  // it, or the server restarted against a different database. Handling it in
+  // one place means no page has to think about it.
+  useEffect(() => {
+    setUnauthorizedHandler(() => clearSession());
+    return () => setUnauthorizedHandler(null);
+  }, [clearSession]);
+
+  // Ask the server who we are, once, on mount. The cookie is HttpOnly so this
+  // is the only way to find out whether it is still valid.
+  useEffect(() => {
+    let cancelled = false;
+    api.me()
+      .then(({ user: u }) => { if (!cancelled) { setUser(u); setAuthState('authenticated'); } })
+      .catch(() => { if (!cancelled) { setUser(null); setAuthState('anonymous'); } });
+    return () => { cancelled = true; };
   }, []);
+
+  const login = useCallback(async (email, password) => {
+    const { user: u } = await api.login(email, password);
+    setUser(u);
+    setAuthState('authenticated');
+    return u;
+  }, []);
+
+  const logout = useCallback(async () => {
+    // Revoke server-side FIRST. Clearing local state without revoking would
+    // leave a live session usable by anyone who still has the cookie.
+    try {
+      await api.logout();
+    } catch (err) {
+      // The session may already be dead; the local clear below still has to happen.
+      console.error('Logout call failed (clearing local session anyway):', err.message);
+    }
+    clearSession();
+  }, [clearSession]);
 
   /** Reset fully — clears the working enquiry AND any offer draft, exactly like restarting the bot. Chat history (the list itself) is left intact, matching normal chatbot UX (old conversations stay in the sidebar). */
   const startNewChat = useCallback(() => {
@@ -93,7 +154,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const value = {
-    role, login, logout,
+    user, role, authState, login, logout,
     chatHistory, saveToHistory, openHistoryEntry,
     enquiry, setEnquiry, startNewChat,
     offer, setOffer,

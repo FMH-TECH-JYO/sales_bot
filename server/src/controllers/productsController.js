@@ -7,9 +7,16 @@ async function listProducts(req, res) {
   const params = [];
   let sql = `
     SELECT p.*, c.label AS category_label,
-      EXISTS(
-        SELECT 1 FROM product_catalogue_files f
-        WHERE f.product_id = p.id AND f.is_current = TRUE
+      (
+        EXISTS(
+          SELECT 1 FROM product_catalogue_files f
+          WHERE f.product_id = p.id AND f.is_current = TRUE
+        )
+        OR EXISTS(
+          SELECT 1 FROM catalogue_uploads u
+          WHERE u.product_id = p.id AND u.stored_file_url IS NOT NULL
+            AND u.stored_file_url NOT LIKE 'seed:%'
+        )
       ) AS has_catalogue
     FROM products p JOIN categories c ON c.id = p.category_id`;
   if (category) {
@@ -58,25 +65,55 @@ async function getProduct(req, res) {
 // which would just silently save the file with no way to look at it first.
 async function downloadCatalogue(req, res) {
   const storage = require('../storage');
-  const { rows } = await db.query(
+  // Preferred source: the PUBLISHED catalogue file for this exact product.
+  let { rows } = await db.query(
     `SELECT file_url, product_id FROM product_catalogue_files WHERE product_id=$1 AND is_current=TRUE`,
     [req.params.id]
   );
-  if (!rows.length) return res.status(404).json({ error: 'No catalogue file on record for this product' });
+
+  // Fallback: a datasheet the admin uploaded against this product but hasn't
+  // published yet. publishCatalogue() is the only thing that writes
+  // product_catalogue_files, so before publish the PDF exists and is simply
+  // unreachable from the matching screen. Showing the admin's own upload is
+  // exactly what "show the catalogue from the admin login" means.
+  // 'seed:%' rows are the baseline seed's placeholders and have no file.
+  if (!rows.length) {
+    const alt = await db.query(
+      `SELECT stored_file_url AS file_url, product_id
+         FROM catalogue_uploads
+        WHERE product_id = $1
+          AND stored_file_url IS NOT NULL
+          AND stored_file_url NOT LIKE 'seed:%'
+        ORDER BY published_at DESC NULLS LAST, id DESC
+        LIMIT 1`,
+      [req.params.id]
+    );
+    rows = alt.rows;
+  }
+
+  if (!rows.length) {
+    return res.status(404).json({
+      error: `No datasheet is on record for "${req.params.id}". This product came from the baseline ` +
+        `catalogue seed rather than an upload, so no PDF was ever stored for it. Upload its datasheet ` +
+        `in Catalogue Manager and publish it, and it will appear here.`,
+      reason: 'no_file_for_product',
+      productId: req.params.id,
+    });
+  }
   // The DB row exists but the actual PDF bytes might not — e.g. this
   // machine's database was restored via db:import-catalogue but
   // server/uploads/ wasn't pulled/committed alongside it (or a file was
   // deleted from disk directly). Give a clear, actionable error instead of
   // a raw ENOENT/500 — this is the #1 way "download isn't working" reports
   // happen, and the fix is always the same: see DEPLOY.md.
-  if (!storage.exists(rows[0].file_url)) {
+  if (!(await storage.exists(rows[0].file_url))) {
     return res.status(404).json({
       error: `Datasheet PDF for "${rows[0].product_id}" is missing from this server's storage (expected key ${rows[0].file_url}). ` +
         `The catalogue database record exists, but the actual file isn't on disk. This usually means server/uploads/ wasn't pulled ` +
         `or committed alongside the database export on this machine — see DEPLOY.md's "moving this app to another machine" section.`,
     });
   }
-  const buffer = storage.getBuffer(rows[0].file_url);
+  const buffer = await storage.getBuffer(rows[0].file_url);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${rows[0].product_id}.pdf"`);
   res.send(buffer);

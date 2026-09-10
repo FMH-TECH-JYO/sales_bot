@@ -40,6 +40,8 @@
 const db = require('../config/db');
 const { extractStructured } = require('./llmClient');
 const { parseInstrumentTag, tagHintLine } = require('./parseInstrumentTag');
+const { assessMatch } = require('./matchConfidence');
+const { compareAttributes, productAttributes } = require('./compareAttributes');
 const { parseEnquiryText, detectCategory } = require('./parseEnquiryText');
 const { parseEnquiryFile, isExcelFile, isPdfFile } = require('./enquiryFileParser');
 const { splitEnquiryText } = require('./splitEnquiries');
@@ -146,45 +148,14 @@ async function runFallback(parsed, products) {
     .sort((a, b) => b.percent - a.percent);
 }
 
-/** Structured requested-vs-actual table, built deterministically from the
- * regex-parsed enquiry and the candidate's real catalogue fields — this is
- * the exact-value comparison the UI shows alongside the LLM's free-text
- * matching/deviation/missing lists. Never touches the LLM, so it can't drift
- * from what's actually in the database. */
-function buildRequestedVsActual(parsed, product) {
-  const rows = [];
-  rows.push({
-    parameter: 'Range',
-    requested: parsed.range ? `${parsed.range.min} to ${parsed.range.max}` : null,
-    actual: (product.val_min != null && product.val_max != null) ? `${product.val_min} to ${product.val_max}` : null,
-  });
-  rows.push({
-    parameter: 'Max temperature',
-    requested: parsed.tempMax != null ? `${parsed.tempMax}°C` : null,
-    actual: product.temp_max != null ? `${product.temp_max}°C` : null,
-  });
-  rows.push({
-    parameter: 'Area classification',
-    requested: parsed.hazardous || null,
-    actual: product.hazardous || null,
-  });
-  rows.push({
-    parameter: 'Output type',
-    requested: parsed.outputCandidates.length ? parsed.outputCandidates.join(', ') : null,
-    actual: product.output_type || null,
-  });
-  rows.push({ parameter: 'Accuracy', requested: null, actual: product.accuracy || null });
-  rows.push({ parameter: 'Process connection', requested: null, actual: product.connection || null });
-
-  return rows.map((r) => {
-    let status;
-    if (r.requested == null && r.actual == null) status = 'unspecified';
-    else if (r.requested == null) status = 'not_requested';
-    else if (r.actual == null) status = 'missing';
-    else status = String(r.requested).toLowerCase() === String(r.actual).toLowerCase() ? 'match' : 'compare';
-    return { ...r, status };
-  }).filter((r) => r.status !== 'unspecified');
-}
+// buildRequestedVsActual() used to live here. It compared exactly six fixed
+// columns — range, max temperature, area classification, output type, accuracy,
+// process connection — which is why an RTD enquiry stating sheath diameter,
+// element type, insertion length and head material produced a comparison table
+// with nothing useful in it. compareAttributes.js replaced it with a comparison
+// over whatever attributes the enquiry and the datasheet actually state. The
+// old function is deleted rather than left unreachable: two comparison engines
+// in one file, one of them dead, is how the wrong one gets called next time.
 
 /**
  * For missing_specs the LLM flagged (an enquiry-stated requirement no
@@ -299,9 +270,13 @@ async function matchSingleEnquiry(text, { attachmentNames = [], enrichFromDatash
       EXISTS(
         SELECT 1 FROM product_catalogue_files f
         WHERE f.product_id = p.id AND f.is_current = TRUE
+      ) OR EXISTS(
+        SELECT 1 FROM catalogue_uploads u
+        WHERE u.product_id = p.id AND u.stored_file_url IS NOT NULL
+          AND u.stored_file_url NOT LIKE 'seed:%'
       ) AS has_catalogue,
       COALESCE(
-        (SELECT json_agg(json_build_object('label', es.label, 'value', es.value) ORDER BY es.label)
+        (SELECT json_agg(json_build_object('label', es.label, 'value', es.value) ORDER BY es.sort_order NULLS LAST, es.label)
          FROM product_extra_spec es WHERE es.product_id = p.id),
         '[]'
       ) AS extra_specs
@@ -311,13 +286,46 @@ async function matchSingleEnquiry(text, { attachmentNames = [], enrichFromDatash
   const { rows: candidates } = await db.query(candidateSql, [categoryId]);
 
   if (candidates.length === 0) {
-    return { text, categoryId, parsed, results: [], provider: 'none', warning: 'No products found for this enquiry\'s category. Check the admin console has published catalogue entries for this product family.' };
+    const { rows: pending } = await db.query(
+      `SELECT status, COUNT(*)::int AS n FROM catalogue_uploads
+        WHERE category_id = $1 AND (product_id IS NULL OR status <> 'published')
+        GROUP BY status`, [categoryId]
+    );
+    const { rows: stocked } = await db.query(
+      `SELECT c.id, c.label, COUNT(p.id)::int AS n
+         FROM categories c JOIN products p ON p.category_id = c.id
+        GROUP BY c.id, c.label HAVING COUNT(p.id) > 0
+        ORDER BY c.label`
+    );
+    const pendingTotal = pending.reduce((t, r) => t + r.n, 0);
+
+    let warning = `No published products in category "${categoryId}", so there was nothing to match against.`;
+    if (pendingTotal > 0) {
+      warning += ` There ${pendingTotal === 1 ? 'is 1 upload' : `are ${pendingTotal} uploads`} in this category ` +
+        `(${pending.map((r) => `${r.n} ${r.status}`).join(', ')}) that ${pendingTotal === 1 ? 'has' : 'have'} not been PUBLISHED yet. ` +
+        `Uploading a datasheet stores the file; publishing it is what creates the catalogue product the matcher searches. ` +
+        `Open Catalogue Manager, review the draft and click Publish.`;
+    } else {
+      warning += ` Nothing has been uploaded for this category at all.`;
+    }
+    if (stocked.length) {
+      warning += ` Categories that do have published products: ${stocked.map((c) => `${c.label} (${c.n})`).join(', ')}.`;
+    }
+    return { text, categoryId, parsed, results: [], provider: 'none', warning };
   }
 
   let llmResults;
   let provider;
   try {
-    const userText = `Enquiry:\n${text}\n\nCandidate products (JSON):\n${JSON.stringify(buildCandidateSummary(candidates))}`;
+    // Hand the model the requirements we already read deterministically. It
+    // stops the model having to re-derive "10KG" = 10 kg/cm2 design pressure
+    // from shorthand, and makes any disagreement with our own parse visible.
+    const stated = (parsed.shorthand?.attributes || [])
+      .map((a) => `- ${a.label}: ${a.value}`).join('\n');
+    const userText =
+      `Enquiry:\n${text}\n\n` +
+      (stated ? `Requirements already read from this enquiry (treat as stated by the customer):\n${stated}\n\n` : '') +
+      `Candidate products (JSON):\n${JSON.stringify(buildCandidateSummary(candidates))}`;
     const { data, model } = await extractStructured(SYSTEM_PROMPT, userText, matchSchema);
     if (!data.results || !Array.isArray(data.results) || data.results.length === 0) {
       throw new Error('LLM returned no results');
@@ -350,7 +358,39 @@ async function matchSingleEnquiry(text, { attachmentNames = [], enrichFromDatash
   const DATASHEET_ENRICH_TOP_N = 3;
   for (let i = 0; i < llmResults.length; i++) {
     const r = llmResults[i];
-    r.requestedVsActual = buildRequestedVsActual(parsed, r.product);
+    // Compare EVERY attribute the enquiry stated against whatever the product
+    // actually specifies — fixed fields and its spec table alike. The old
+    // buildRequestedVsActual() only knew six columns, so an RTD enquiry
+    // (sheath diameter, wire configuration, element type, insertion length)
+    // produced six rows of dashes and nothing to score on.
+    const cmp = compareAttributes(parsed.shorthand?.attributes || [], productAttributes(r.product));
+    r.requestedVsActual = cmp.rows.map((row) => ({
+      field: row.parameter,
+      requested: row.requested,
+      actual: row.actual,
+      verdict: row.verdict,
+      note: row.note,
+    }));
+    r.attributeScore = cmp.score;
+    r.attributeSummary = { matched: cmp.matched, deviations: cmp.deviations, unconfirmed: cmp.unconfirmed };
+
+    // Deterministic deviations sit alongside the model's, de-duplicated. These
+    // carry real numbers ("300 mm requested, product is 450 mm") that a model
+    // paraphrase tends to lose.
+    const found = new Set((r.deviations || []).map((d) => String(d).toLowerCase()));
+    for (const row of cmp.rows) {
+      if (row.verdict !== 'deviation') continue;
+      if (found.has(row.note.toLowerCase())) continue;
+      found.add(row.note.toLowerCase());
+      r.deviations = [...(r.deviations || []), `${row.parameter}: ${row.note}`];
+    }
+    for (const row of cmp.rows) {
+      if (row.verdict !== 'unclear' || !row.requested) continue;
+      const msg = `${row.parameter} — requested "${row.requested}", not stated on the product datasheet`;
+      if (!(r.missingSpecs || []).some((m) => String(m).toLowerCase() === msg.toLowerCase())) {
+        r.missingSpecs = [...(r.missingSpecs || []), msg];
+      }
+    }
     r.sources = [];
     if (r.product.has_catalogue) {
       r.sources.push({ type: 'catalogue', productId: r.product.id, label: `${r.product.model} — published datasheet` });
@@ -366,7 +406,11 @@ async function matchSingleEnquiry(text, { attachmentNames = [], enrichFromDatash
 
   const clarificationsNeeded = computeClarificationsNeeded(parsed, llmResults);
 
-  return { text, categoryId, categorySource, parsed, results: llmResults, provider, clarificationsNeeded };
+  // Never present a ranking the system itself doesn't trust. See
+  // matchConfidence.js — six products tied at 50% is not a match.
+  const confidence = assessMatch({ parsed, results: llmResults, provider });
+
+  return { text, categoryId, categorySource, parsed, results: llmResults, provider, clarificationsNeeded, confidence };
 }
 
 /**
