@@ -82,12 +82,16 @@ describe('checkProductionPrerequisites', () => {
     }
   });
 
-  test('the missing offer templates are reported as a warning against this repo as it stands', () => {
-    // server/templates/offers/ contains only a README — no .docx — so offer
-    // generation answers "No offer template uploaded yet" for every product.
-    // This asserts the check SEES that, which is the point of having it.
+  test('the offer template check passes now that pressure_gauge.docx exists', () => {
+    // This assertion used to be the opposite: it asserted the WARNING fired,
+    // because server/templates/offers/ held only a README and every offer
+    // request answered "No offer template uploaded yet". The template is now
+    // built from the company's own Format.docx, so the check must be quiet —
+    // and if someone deletes or renames that file, this test fails and says so
+    // rather than the failure surfacing as a broken offer for a customer.
     const r = run({ NODE_ENV: 'development' });
-    assert.match(r.warnings.join(' '), /offer template/i);
-    assert.equal(r.ok, true, 'a missing template must not stop the app');
+    assert.equal(r.warnings.some((w) => /offer template/i.test(w)), false,
+      'the offer-template warning fired — is server/templates/offers/pressure_gauge.docx missing?');
+    assert.equal(r.ok, true);
   });
 });

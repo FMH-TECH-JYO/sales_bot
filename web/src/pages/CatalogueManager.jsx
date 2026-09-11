@@ -188,35 +188,39 @@ function UploadsTable({ uploads, selectedId, onSelect }) {
   return (
     <div className="panel">
       <h2>Catalogue uploads ({uploads.length})</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>File</th>
-            <th>Category</th>
-            <th>Status</th>
-            <th>Uploaded</th>
-          </tr>
-        </thead>
-        <tbody>
-          {uploads.map((u) => (
-            <tr key={u.id} className={u.id === selectedId ? 'row-selected' : ''} onClick={() => onSelect(u.id)}>
-              <td>{u.original_filename}</td>
-              <td>{u.category_id || <em>none</em>}</td>
-              <td>
-                <StatusBadge status={u.status} />
-              </td>
-              <td>{new Date(u.uploaded_at).toLocaleString()}</td>
-            </tr>
-          ))}
-          {uploads.length === 0 && (
+      <div className="table-scroll">
+        {/* Horizontal scroll lives on this wrapper, not on the table:
+            a table may be wider than a phone screen; the PAGE may not. */}
+        <table>
+          <thead>
             <tr>
-              <td colSpan={4} className="empty">
-                No uploads yet.
-              </td>
+              <th>File</th>
+              <th>Category</th>
+              <th>Status</th>
+              <th>Uploaded</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {uploads.map((u) => (
+              <tr key={u.id} className={u.id === selectedId ? 'row-selected' : ''} onClick={() => onSelect(u.id)}>
+                <td>{u.original_filename}</td>
+                <td>{u.category_id || <em>none</em>}</td>
+                <td>
+                  <StatusBadge status={u.status} />
+                </td>
+                <td>{new Date(u.uploaded_at).toLocaleString()}</td>
+              </tr>
+            ))}
+            {uploads.length === 0 && (
+              <tr>
+                <td colSpan={4} className="empty">
+                  No uploads yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

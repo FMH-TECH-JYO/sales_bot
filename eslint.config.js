@@ -67,6 +67,25 @@ module.exports = [
     },
   },
 
+  // --- Browser E2E ---
+  // Node code that ALSO contains browser code: the callbacks passed to
+  // page.evaluate() are serialised and run inside Chromium, so `document`,
+  // `window` and `localStorage` are legitimately in scope there even though
+  // the file itself runs under Node. Both global sets are declared rather than
+  // sprinkling eslint-disable comments through the file.
+  {
+    files: ['e2e/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'commonjs',
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+    },
+  },
+
   // --- Browser: the React app ---
   {
     files: ['web/**/*.{js,jsx}'],

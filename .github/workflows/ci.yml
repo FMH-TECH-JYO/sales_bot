@@ -1,0 +1,115 @@
+# .github/workflows/ci.yml
+#
+# There was no CI. Every check in this file is one that has already caught a
+# real defect in this repository:
+#
+#   * `npm ci` would have caught the three files committed with unresolved
+#     `<<<<<<< HEAD` merge markers — they are syntax errors, so nothing that
+#     loads them can start.
+#   * `npm test` covers the authorization matrix, which is the regression test
+#     for an endpoint that published a catalogue for anyone who asked.
+#   * `npm run lint` found five blocks of dead code that two different
+#     comparison engines had left behind in one file.
+#   * `npm run build` is the only thing that proves the React app still
+#     compiles; a JSX error is invisible until someone builds.
+#
+# The database is a real Postgres service, not a mock. The auth tests exist to
+# prove that a session is checked against a real table.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fm
+          POSTGRES_PASSWORD: fm_ci_password
+          POSTGRES_DB: fm_platform
+        ports: ['5432:5432']
+        # Without this the first migration races the database's own startup and
+        # the job fails intermittently, which trains people to re-run CI
+        # instead of reading it.
+        options: >-
+          --health-cmd "pg_isready -U fm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://fm:fm_ci_password@localhost:5432/fm_platform
+      NODE_ENV: test
+      # Honoured only outside production; the limiters would otherwise reject
+      # the very requests the tests are making.
+      DISABLE_RATE_LIMIT: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it installs exactly the lockfile and
+      # fails if package.json and the lockfile disagree, which is a real class of
+      # "works on my machine".
+      - run: npm ci
+
+      - run: npm run lint
+
+      - name: Install schema and migrations
+        run: npm run setup
+
+      - name: Migrations are idempotent
+        # Running setup twice must be a no-op. The catalogue-destroying bug this
+        # project spent a day on was an import path that truncated before
+        # checking, so "run it twice and nothing changes" is a property worth
+        # asserting on every commit rather than trusting.
+        run: npm run setup
+
+      - run: npm test
+
+      - run: npm run build
+
+      # The browser suite. It is separate from `npm test` because it needs a
+      # ~150 MB browser, which would make the fast suite uninstallable on a
+      # laptop that just wants to run the unit tests. Here the download is
+      # cheap and cached, and this is the only thing that proves the login
+      # screen works at all — everything else tests the API from Node.
+      #
+      # It found two real defects on its first run: a Content-Security-Policy
+      # that blocked the brand's own web font, and a layout that scrolled
+      # sideways on a phone.
+      - name: Install the browser for E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end (real browser)
+        run: npm run test:e2e
+
+      # Advisories are reported, and only a CRITICAL fails the build. xlsx
+      # carries a high-severity advisory with no fix available on npm — see
+      # server/src/services/documentWorker.js for the containment — and a job
+      # that fails on something nobody can act on gets ignored or disabled,
+      # which is worse than one that reports honestly.
+      - name: Dependency audit (report only)
+        run: npm audit --omit=dev || true
+
+      - name: Fail on CRITICAL advisories
+        run: npm audit --omit=dev --audit-level=critical
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Building the image on every PR means a broken Dockerfile is found here
+      # rather than during a deploy.
+      - run: docker build -t fm-platform:ci .

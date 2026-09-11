@@ -121,38 +121,42 @@ export default function AdminDashboard() {
           )}
 
           {state === 'ready' && filtered.length > 0 && (
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th><th>Customer</th><th>Source</th><th>Items</th>
-                  <th>Matches</th><th>Stage</th><th>Received</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((e) => (
-                  <tr key={e.id}>
-                    <td>{e.id}</td>
-                    {/* customer_name is nullable — an enquiry pasted as text
-                        need not name anyone. "—" is honest; inventing a
-                        company name is what this page used to do. */}
-                    <td>{e.customer_name || <em>not stated</em>}</td>
-                    <td>{e.source_filename || e.source_type}</td>
-                    <td>{e.item_count}</td>
-                    <td>{e.match_count}</td>
-                    <td>
-                      <span style={{
-                        background: STAGE_COLORS[e.stage] || '#8b8b8b',
-                        color: '#fff', borderRadius: 999, padding: '2px 10px',
-                        fontSize: 12, fontWeight: 600,
-                      }}>
-                        {STAGE_LABELS[e.stage] || e.stage}
-                      </span>
-                    </td>
-                    <td>{e.uploaded_at ? new Date(e.uploaded_at).toLocaleString() : '—'}</td>
+            <div className="table-scroll">
+              {/* Horizontal scroll lives on this wrapper, not on the table:
+                  a table may be wider than a phone screen; the PAGE may not. */}
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Customer</th><th>Source</th><th>Items</th>
+                    <th>Matches</th><th>Stage</th><th>Received</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map((e) => (
+                    <tr key={e.id}>
+                      <td>{e.id}</td>
+                      {/* customer_name is nullable — an enquiry pasted as text
+                          need not name anyone. "—" is honest; inventing a
+                          company name is what this page used to do. */}
+                      <td>{e.customer_name || <em>not stated</em>}</td>
+                      <td>{e.source_filename || e.source_type}</td>
+                      <td>{e.item_count}</td>
+                      <td>{e.match_count}</td>
+                      <td>
+                        <span style={{
+                          background: STAGE_COLORS[e.stage] || '#8b8b8b',
+                          color: '#fff', borderRadius: 999, padding: '2px 10px',
+                          fontSize: 12, fontWeight: 600,
+                        }}>
+                          {STAGE_LABELS[e.stage] || e.stage}
+                        </span>
+                      </td>
+                      <td>{e.uploaded_at ? new Date(e.uploaded_at).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 

@@ -42,7 +42,25 @@ function loadDoc(categoryId) {
   }
   const content = fs.readFileSync(templatePath);
   const zip = new PizZip(content);
-  return new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, delimiters: { start: '{{', end: '}}' } });
+  return new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    delimiters: { start: '{{', end: '}}' },
+    // A tag with no value renders as EMPTY, not as the word "undefined".
+    //
+    // This is docxtemplater's default behaviour and it is wrong for this
+    // application: rendering a real offer with a partially-filled form put the
+    // literal string "undefined" into "Kind Attn : undefined", "Reference
+    // standard - undefined", "Dial Size - undefined" and eleven other rows of
+    // a document that goes to a customer on company letterhead.
+    //
+    // renderOffer() below used to guard against this with a Proxy, which never
+    // worked: docxtemplater resolves a tag by asking whether the scope HAS the
+    // key, and a Proxy with only a `get` trap answers that from the target, so
+    // a missing key was reported as absent and this nullGetter ran anyway.
+    // Setting it here fixes it at the point that actually decides.
+    nullGetter: () => '',
+  });
 }
 
 /**
@@ -72,8 +90,15 @@ function listPlaceholders(categoryId) {
  */
 function renderOffer(categoryId, data) {
   const doc = loadDoc(categoryId);
-  const safeData = new Proxy(data, { get: (t, k) => (k in t ? t[k] : '') });
-  doc.render(safeData);
+  // No Proxy wrapper: the missing-value case is handled by nullGetter in
+  // loadDoc(), which is the hook docxtemplater actually consults. Null and
+  // undefined values that ARE present in `data` are normalised here for the
+  // same reason — String(null) is "null", and that must never reach a customer.
+  const clean = {};
+  for (const [key, value] of Object.entries(data || {})) {
+    clean[key] = value === null || value === undefined ? '' : String(value);
+  }
+  doc.render(clean);
   return doc.getZip().generate({ type: 'nodebuffer' });
 }
 

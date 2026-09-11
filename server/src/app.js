@@ -60,7 +60,26 @@ app.use(helmet({
       // Vite emits a small inline module script in index.html, and the app's
       // styles are injected as inline <style> at runtime.
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+
+      // Google Fonts is allowed for STYLESHEETS and FONT FILES only.
+      //
+      // web/src/index.css opens with an @import of Roboto — the Forbes
+      // Marshall brand toolbox names Roboto as the web font and says Arial is
+      // print-only. A CSP of just 'self' blocked it, so the deployed app
+      // silently fell back to a system font and the browser console filled
+      // with "Refused to load the stylesheet". Nothing failed loudly; the
+      // application simply stopped being on-brand.
+      //
+      // Two hosts, because Google serves them separately: googleapis.com
+      // returns the CSS, gstatic.com serves the .woff2 files it references.
+      // Allowing only the first still blocks the font itself.
+      //
+      // If this ever has to run on a network without access to Google, swap
+      // the @import for self-hosted @font-face files and delete both entries —
+      // see the note at the top of index.css.
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+
       imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'", ...(process.env.CSP_CONNECT_SRC || '').split(',').filter(Boolean)],
       objectSrc: ["'none'"],
@@ -188,6 +207,39 @@ app.use((req, res) => {
   res.status(404).json({ error: `No route for ${req.method} ${req.path}` });
 });
 
+/**
+ * Is this error "I could not reach the database", as opposed to a bug?
+ *
+ * Matched on error CODES rather than message text: pg and libpq set these, and
+ * they do not change with locale or version the way a message string does.
+ *
+ *   ECONNREFUSED  nothing listening — Postgres stopped, or the wrong port
+ *   ENOTFOUND     the host does not resolve — a typo, or DNS is down
+ *   ETIMEDOUT     no answer — firewall, or a serverless database still waking
+ *   ECONNRESET    the connection was dropped mid-query
+ *   EHOSTUNREACH / ENETUNREACH  no route to the host
+ *   57P01/57P02/57P03  Postgres itself: admin shutdown, crash shutdown,
+ *                      cannot connect now (still starting up or in recovery)
+ *   53300         too many connections — the pool is exhausted, which is a
+ *                 capacity problem to route around, not a code defect
+ *
+ * Deliberately NOT included: 28P01 (bad password) and 3D000 (no such database).
+ * Those are misconfiguration that will never fix itself, so reporting them as a
+ * transient 503 would have a load balancer retry forever instead of failing
+ * loudly. They stay 500s and land in the log with their reference id.
+ */
+const DB_UNREACHABLE_CODES = new Set([
+  'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH',
+  '57P01', '57P02', '57P03', '53300',
+]);
+
+function isDatabaseUnreachable(err) {
+  if (!err) return false;
+  if (DB_UNREACHABLE_CODES.has(err.code)) return true;
+  // pg-pool wraps the socket error, so check one level down too.
+  return Boolean(err.cause && DB_UNREACHABLE_CODES.has(err.cause.code));
+}
+
 // --- error handler -----------------------------------------------------------
 // MUST be registered last. Every async route is wrapped in asyncHandler, so a
 // thrown or rejected error lands here rather than crashing the process.
@@ -199,14 +251,29 @@ app.use((req, res) => {
 // their message, because "Password must be at least 12 characters" is useless
 // to an attacker and essential to a user. Anything 500 and above becomes a
 // fixed string plus an id that ties the response to the log line.
-app.use((err, req, res, next) => {
-  const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+function errorHandler(err, req, res, next) {    
+  let status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+
+  // "The database is unreachable" is not the same fault as "this code threw",
+  // and reporting both as an opaque 500 wasted real time: signing in against a
+  // stopped Postgres produced "Something went wrong on our side, quote
+  // reference 1aa13945bdc5" — true, unhelpful, and indistinguishable from a
+  // bug in the login logic. 503 is the correct code for a dependency being
+  // unavailable, it tells a load balancer to route elsewhere, and the message
+  // points at the thing to actually check.
+  //
+  // The specific message is safe to show: that a service has a database is not
+  // a secret, and no host, port, credential or query text is included.
+  if (isDatabaseUnreachable(err)) status = 503;
 
   if (status >= 500) {
     const ref = require('crypto').randomBytes(6).toString('hex');
     console.error(`[${ref}] ${req.method} ${req.originalUrl}`, err);
     return res.status(status).json({
-      error: 'Something went wrong on our side. Quote reference ' + ref + ' if you report this.',
+      error: status === 503
+        ? 'The service cannot reach its database right now. If this persists, check that the database is running and that DATABASE_URL is correct. Reference ' + ref + '.'
+        : 'Something went wrong on our side. Quote reference ' + ref + ' if you report this.',
+      code: status === 503 ? 'DATABASE_UNAVAILABLE' : undefined,
       ref,
     });
   }
@@ -219,6 +286,8 @@ app.use((err, req, res, next) => {
   const payload = { error: err.message || 'Request could not be processed' };
   if (typeof err.code === 'string' && /^[A-Z_]+$/.test(err.code)) payload.code = err.code;
   res.status(status).json(payload);
-});
+}
 
-module.exports = { app, allowedOrigins };
+app.use(errorHandler);
+
+module.exports = { app, allowedOrigins, errorHandler, isDatabaseUnreachable };

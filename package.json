@@ -24,7 +24,8 @@
     "test:coverage": "node --test --experimental-test-coverage --test-concurrency=1",
     "lint": "eslint .",
     "build": "npm run build --workspace=web",
-    "start": "node server/src/index.js"
+    "start": "node server/src/index.js",
+    "test:e2e": "node e2e/login.e2e.js"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
@@ -38,7 +39,8 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "eslint": "^9.39.5",
-    "globals": "^16.5.0"
+    "globals": "^16.5.0",
+    "playwright": "^1.56.0"
   },
   "overrides": {
     "qs@<6.16.0": "^6.16.0"

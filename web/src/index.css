@@ -51,10 +51,43 @@ body {
 }
 
 .app {
+  /* width: 100% is load-bearing, not redundant.
+     .app is a flex ITEM — every page that uses it sits inside
+     .chat-shell { display: flex; flex-direction: column }. With width:auto a
+     flex item is sized from its content, and Chromium sized this one to its
+     max-content (421px) inside a 390px container, so the whole document
+     scrolled sideways on a phone. Pinning the width to the container makes the
+     content wrap instead. max-width and the auto margins keep the desktop
+     layout identical: on a wide screen the box is still capped at 1200 and
+     centred. Verified by measuring scrollWidth - clientWidth at 390px, which
+     goes 31 -> 0 with this line and stays 0 with it removed only if the flex
+     parent is also changed. */
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
 }
+
+@media (max-width: 560px) {
+  .app { padding: 16px 14px; }
+  .admin-page { padding: 16px 14px; }
+}
+
+/* A table is the one thing allowed to be wider than the screen — but it has to
+   scroll INSIDE its own box, or the whole document scrolls sideways with it.
+   The catalogue manager's table pushed the page 166px wide at 390px.
+   
+   The wrapper is a real element rather than `display: block` on the <table>
+   itself. That shortcut looked equivalent and was not: the rows stay
+   table-row boxes and keep their own min-content width, so the table still
+   spilled 31px past its panel. A block-level scroll container around it is the
+   arrangement that actually clips. */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll > table { min-width: 100%; }
 
 .app-header { margin-bottom: 20px; }
 .app-header h1 { color: var(--navy); margin: 0 0 4px; font-size: 22px; font-weight: 700; }
@@ -106,7 +139,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .error-box { background: var(--fm-danger-bg); color: var(--fm-danger); border-radius: 6px; padding: 8px 12px; font-size: 13px; margin: 8px 0; }
 
 .split { display: grid; grid-template-columns: 420px 1fr; gap: 18px; align-items: start; }
-@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+/* minmax(0, 1fr), not 1fr. A `1fr` track carries an implicit `min-width: auto`,
+   so it refuses to shrink below its content's min-content width — the
+   catalogue manager's single column stayed 508px wide inside a 390px screen
+   and pushed the whole document sideways by 146px. minmax(0, 1fr) removes that
+   floor and lets the column actually be the width of the screen. */
+@media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); } }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
@@ -121,7 +159,9 @@ tr.row-selected { background: var(--fm-blue-10); }
 .review-header h2 { font-size: 16px; margin: 0; }
 .review-actions { display: flex; align-items: center; gap: 10px; }
 
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 14px 0; }
+.form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; margin: 14px 0; }
+/* Two columns of form fields do not fit a phone; one column does. */
+@media (max-width: 560px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
 .field-row { display: flex; flex-direction: column; gap: 4px; }
 .field-row.full { grid-column: 1 / -1; }
 .field-row label { font-size: 12px; color: var(--sub); font-weight: 700; display: flex; align-items: center; gap: 6px; }
@@ -188,12 +228,31 @@ tr.row-selected { background: var(--fm-blue-10); }
 .top-bar {
   display: flex; align-items: center; gap: 16px;
   padding: 10px 22px; background: var(--navy); border-bottom: 3px solid var(--fm-navy-dark);
+  /* The row had no way to give: three fixed-width children plus a flex:1
+     title pushed 16px past the viewport at 390px wide and the whole page
+     scrolled sideways. Wrapping is the honest answer on a narrow screen. */
+  flex-wrap: wrap;
 }
-.top-bar-logo { height: 24px; display: block; }
-.top-bar-title { color: #fff; font-weight: 500; font-size: 14px; flex: 1; opacity: .92; }
-.top-bar-right { display: flex; align-items: center; gap: 12px; }
-.role-chip { background: rgba(255,255,255,0.15); color: #fff; border-radius: 999px; padding: 3px 12px; font-size: 12px; font-weight: 700; }
+.top-bar-logo { height: 24px; display: block; flex: none; }
+/* min-width: 0 lets a flex child shrink below its content width — without it
+   a long title refuses to shrink and pushes its siblings out of the viewport. */
+.top-bar-title { color: #fff; font-weight: 500; font-size: 14px; flex: 1 1 0; min-width: 0; opacity: .92; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-bar-right { display: flex; align-items: center; gap: 12px; flex: none; min-width: 0; }
+.role-chip {
+  background: rgba(255,255,255,0.15); color: #fff; border-radius: 999px;
+  padding: 3px 12px; font-size: 12px; font-weight: 700;
+  /* The chip carries the signed-in person's name, which has no length limit.
+     Truncate rather than let one long name break the header. */
+  max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .top-bar-logout { color: rgba(255,255,255,0.85) !important; }
+
+@media (max-width: 560px) {
+  .top-bar { padding: 10px 14px; gap: 10px; }
+  /* The page title is repeated by the page itself; the bar's copy is the
+     first thing worth dropping when there is no room. */
+  .top-bar-title { flex-basis: 100%; order: 3; }
+}
 
 /* =========================================================================
    CHAT
@@ -237,7 +296,7 @@ tr.row-selected { background: var(--fm-blue-10); }
 .match-enquiry-text { font-size: 14px; color: var(--ink); font-style: italic; max-width: 700px; }
 
 .match-top { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
-@media (max-width: 900px) { .match-top { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .match-top { grid-template-columns: minmax(0, 1fr); } }
 
 .match-primary-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
 .match-product-model { font-size: 22px; font-weight: 900; color: var(--navy); }
@@ -248,7 +307,8 @@ tr.row-selected { background: var(--fm-blue-10); }
 .match-badge-pct { font-size: 28px; font-weight: 900; }
 .match-badge-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sub); }
 
-.spec-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+.spec-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin: 16px 0; }
+@media (max-width: 560px) { .spec-compare { grid-template-columns: minmax(0, 1fr); } }
 .spec-compare-col h4 { font-size: 12.5px; text-transform: uppercase; color: var(--steel); margin: 0 0 8px; }
 .spec-compare-col ul { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.8; }
 
@@ -333,7 +393,8 @@ tr.row-selected { background: var(--fm-blue-10); }
 .offer-meta-row { display: flex; gap: 40px; margin-bottom: 24px; font-size: 13.5px; }
 .offer-customer { margin-bottom: 24px; }
 .offer-customer h4, .offer-terms h4, .offer-scope-notes h4, .offer-edit-panel h4 { font-size: 12.5px; text-transform: uppercase; color: var(--steel); margin: 0 0 8px; font-weight: 700; }
-.offer-customer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.offer-customer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 560px) { .offer-customer-grid { grid-template-columns: minmax(0, 1fr); } }
 .offer-line-table { margin: 20px 0; }
 .offer-line-table th { background: var(--navy); color: #fff; padding: 8px 10px; font-size: 12px; }
 .offer-line-table td { padding: 10px; font-size: 13.5px; border-bottom: 1px solid var(--line); }
@@ -343,7 +404,7 @@ tr.row-selected { background: var(--fm-blue-10); }
 .offer-footer-note { margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--sub); font-style: italic; }
 
 .offer-edit-panel { background: var(--fm-blue-5); border: 1px dashed var(--fm-blue-20); border-radius: 8px; padding: 16px; margin: 24px 0; }
-.offer-edit-grid { display: grid; grid-template-columns: 140px 1fr; gap: 12px; margin-bottom: 12px; }
+.offer-edit-grid { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
 .offer-edit-grid .field-row.full { grid-column: 1 / -1; }
 
 @media print {
@@ -358,7 +419,7 @@ tr.row-selected { background: var(--fm-blue-10); }
 .admin-page { padding: 20px; overflow-y: auto; flex: 1; }
 .admin-note { font-size: 12.5px; color: var(--sub); background: var(--fm-warning-bg); }
 .admin-note code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
-.admin-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0; }
+.admin-stat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 16px 0; }
 .admin-stat { text-align: center; }
 .admin-stat-num { font-size: 28px; font-weight: 900; color: var(--navy); }
 .admin-stat-label { color: var(--sub); font-size: 12.5px; text-transform: uppercase; }
